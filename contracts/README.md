@@ -13,5 +13,3 @@ When the contracts land, this folder will be a **Hardhat v3** project containing
 - `package.json`, `tsconfig.json` — Node / TypeScript setup
 
 The Solidity-test ergonomics (`.t.sol`, `forge-std` imports, fuzz-and-invariant assertions) match Foundry's, but the runtime is Hardhat v3's EDR. This combines Foundry-grade test ergonomics with Hardhat's deployment, plugin, and TypeScript ecosystem.
-
-**Audit budget:** USD 80k–150k from a top-tier firm; see the paper §8.1.
