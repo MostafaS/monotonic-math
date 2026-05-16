@@ -1,0 +1,51 @@
+# Internal editorial / marketing / earlier-draft material — not for public commit
+M2-Monotonic-Math-Explained.html
+M2-StepByStep-Walkthrough.html
+paper-plan.md
+m2-monotonic-math-protocol.md
+design-doc/
+
+# Claude Code IDE config
+.claude/
+
+# LaTeX build artifacts
+*.aux
+*.log
+*.blg
+*.bbl
+*.out
+*.toc
+*.lof
+*.lot
+*.fdb_latexmk
+*.fls
+*.synctex.gz
+*.synctex(busy)
+*.bak
+*.pdfsync
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.ipynb_checkpoints/
+.python-version
+.venv/
+venv/
+env/
+
+# macOS
+.DS_Store
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Misc local
+*.local
+*.orig
+*.rej
+.cache/

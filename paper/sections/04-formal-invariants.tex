@@ -1,0 +1,162 @@
+% ============================================================
+\section{Formal Invariants and Proofs}
+\label{sec:formal-invariants}
+
+This section states the floor-monotonicity property formally, proves it by case analysis over the protocol's complete operation set, and establishes the integer-arithmetic redemption lemma on which the cleanest version of the redemption case relies. We also state the redemption-fairness corollary, a directional conjecture inverting the standard AMM-LP loss-versus-rebalancing framing of \citet{MilionisMoallemiRoughgarden2023} (Conjecture~\ref{conj:lvr-capture}), and a closure result under arbitrary operation interleaving. We close with a sketch of the mechanized-verification path we are pursuing.
+
+\subsection{State model and the operation set}
+\label{sec:formal-state}
+
+We model the system state as the tuple
+\begin{equation}
+\sigma = (\Tres, \Sup, \Lt, \Ls, \Phit, \Phis),
+\label{eq:state}
+\end{equation}
+where $\Tres \in \mathbb{Z}_{\geq 0}$ is the treasury balance in the stable's smallest unit ($\Qstab = 10^{\dstab}$ units per dollar); $\Sup \in \mathbb{Z}_{\geq 0}$ is the total token supply in $10^{-18}$-token units; $(\Lt, \Ls) \in \mathbb{Z}_{\geq 0}^2$ are the LP's active reserves in the same units; and $(\Phit, \Phis) \in \mathbb{Z}_{\geq 0}^2$ are the \emph{raw unrealized fee mass} on the protocol's LP position---i.e.\ the token-side and stable-side fee amounts awaiting realization to the protocol's books on the next \texttt{collectFees} call, denominated in the same units as $\Sup$ and $\Tres$ respectively.\footnote{The Uniswap v4 implementation does not store $\Phit, \Phis$ as raw token amounts; instead, it maintains per-currency Q128.128 fee-growth accumulators \texttt{feeGrowthGlobalX128} into which each swap's input-side fee is folded, with the position's claim computed as $K_{\text{real}} = (\text{accumulator delta}) \cdot \text{liquidity} / 2^{128}$ at realization. Throughout this paper we use the raw-token framing $(\Phit, \Phis)$ for dimensional clarity of the proofs; the v4 Q128.128 realization is an implementation detail that the algebra abstracts away.} On a swap of token input $N_{\text{in}}$ with sell fee $f_s$, the input-side fee $f_s N_{\text{in}}$ is added to $\Phit$; on a swap of stable input $X_{\text{in}}$ with buy fee $f_b$, the input-side fee $f_b X_{\text{in}}$ is added to $\Phis$. At a \texttt{collectFees} call the accumulated $(\Phit, \Phis)$ are drawn off as the realized fees $(\Kreal, \Ureal) = (\Phit, \Phis)$ and both accumulators are reset to zero.
+
+The floor and spot prices are derived quantities, $\Floor = \Tres / \Sup$ (a rational number, evaluated faithfully to integer truncation by the on-chain expression~\eqref{eq:floor-precision}) and $\Spot = \Ls / \Lt$. The constant-product invariant $\kInv = \Lt \cdot \Ls$ is preserved by every swap up to the asymmetric-fee deduction described in Section~\ref{sec:protocol-hook}.
+
+The protocol's \emph{operation set} $\mathrm{Ops}$ is the disjoint union of seven operation classes, exhausting every state transition any externally-callable entry point can induce:
+\begin{align}
+\mathrm{Ops} = \{\;
+  &\text{RevToTreasury}(X),
+  \;\text{BuyAndBurn}(X),
+  \;\text{Redeem}(N), \notag \\
+  &\text{LPBuy}(X_{\text{in}}),
+  \;\text{LPSell}(N_{\text{in}}),
+  \;\text{Transfer}(N, a \to b),
+  \;\text{CollectFees}() \;\}.
+\label{eq:ops}
+\end{align}
+The first two are the two halves of \texttt{routeRevenue}; we split them because they affect the state differently. The next three are the holder-facing operations; the sixth is an ERC-20 transfer, listed for completeness; the seventh realizes accrued fees. No other entry point exists in the protocol bytecode. The threat model of Section~\ref{sec:protocol-threat-model} confines adversary capabilities to compositions of elements of $\mathrm{Ops}$ with arbitrary timing and ordering.
+
+\subsection{Integer-arithmetic redemption}
+\label{sec:formal-redemption-lemma}
+
+The cleanest version of the redemption case requires a small lemma about how the integer arithmetic in the contract implementation relates to the rational ideal $\Floor = \Tres/\Sup$. We state it for a redemption of $N$ tokens against state $(\Tres, \Sup)$ with $N \leq \Sup$.
+
+\begin{lemma}[Integer-Arithmetic Redemption]
+\label{lem:integer-redemption}
+Let $(\Tres, \Sup) \in \mathbb{Z}_{> 0}^2$ with $N \in \mathbb{Z}_{> 0}$ and $N \leq \Sup$. Let the on-chain redemption payout be the integer
+\begin{equation}
+P = \left\lfloor \frac{N \cdot \Tres}{\Sup} \right\rfloor, \qquad
+\text{and write } r = (N \cdot \Tres) \bmod \Sup \in \{0, 1, \ldots, \Sup-1\}.
+\label{eq:redeem-payout}
+\end{equation}
+Let $\Tres' = \Tres - P$ and $\Sup' = \Sup - N$. Then either $\Sup' = 0$---in which case $N = \Sup$ forces $r = 0$ and $P = \Tres$, so $\Tres' = 0$ exactly---or $\Sup' > 0$ and
+\begin{equation}
+\frac{\Tres'}{\Sup'} \;=\; \frac{\Tres}{\Sup} + \frac{r}{\Sup \cdot \Sup'} \;\geq\; \frac{\Tres}{\Sup}.
+\label{eq:integer-redemption}
+\end{equation}
+In particular, $\Floor_{\mathrm{new}} \geq \Floor_{\mathrm{old}}$, with equality if and only if $\Sup \mid N \cdot \Tres$.
+\end{lemma}
+
+\begin{proof}
+By definition of integer division, $N \cdot \Tres = \Sup \cdot P + r$ with $0 \leq r < \Sup$. Then
+\[
+\Tres - P \;=\; \Tres - \frac{N \cdot \Tres - r}{\Sup} \;=\; \frac{\Tres(\Sup - N) + r}{\Sup} \;=\; \frac{\Tres \cdot \Sup' + r}{\Sup}.
+\]
+If $\Sup' > 0$, dividing by $\Sup'$ gives $\Tres'/\Sup' = \Tres/\Sup + r/(\Sup \cdot \Sup')$, which is~\eqref{eq:integer-redemption}. The right-hand correction term is non-negative; it is zero exactly when $r = 0$, i.e.\ when $\Sup$ divides $N \cdot \Tres$ exactly. If $\Sup' = 0$, then $N = \Sup$ and $N \cdot \Tres = \Sup \cdot \Tres$ is divisible by $\Sup$, so $r = 0$ and $P = \Tres$; hence $\Tres' = \Tres - P = 0$ exactly. This is the terminal redemption that drains the contract; the floor at this point is undefined by Section~\ref{sec:protocol-token}, and the contract reverts on the next \texttt{floorPrice}() call via the \texttt{SupplyExhausted} error.
+\end{proof}
+
+The lemma sharpens the informal ``invariant up to truncation'' reading of Case~3 to an exact inequality: integer truncation in the redemption payout strictly favors the treasury and so can only raise the floor for remaining holders. The residual $r/(\Sup \cdot \Sup')$ is at most $1/\Sup'$ per redemption call (a sub-unit-of-stable effect), but it is structurally one-directional.
+
+\subsection{Floor monotonicity}
+\label{sec:formal-monotonicity}
+
+\begin{theorem}[Floor Monotonicity]
+\label{thm:floor-monotonicity}
+Let $\sigma$ be any reachable state of the protocol and let $\text{op} \in \mathrm{Ops}$ be any operation applicable in $\sigma$. Let $\sigma' = \text{op}(\sigma)$. Then
+\begin{equation}
+\Floor(\sigma') \geq \Floor(\sigma),
+\label{eq:floor-monotone}
+\end{equation}
+with the equality and strict-inequality cases as enumerated in the proof.
+\end{theorem}
+
+\begin{proof}
+We argue by cases over the seven operation classes of~\eqref{eq:ops}. In each case we write $(\Tres, \Sup) \to (\Tres', \Sup')$ for the treasury and supply transition and compute the resulting floor.
+
+\textbf{Case 1 --- $\text{RevToTreasury}(X)$ with $X \geq 0$.} The router moves $X$ stable to the treasury. State transition: $(\Tres + X, \Sup)$. Floor: $(\Tres + X)/\Sup \geq \Tres/\Sup$, with strict inequality iff $X > 0$.
+
+\textbf{Case 2 --- $\text{BuyAndBurn}(X)$ with $X \geq 0$.} The router uses $X$ stable to execute a buy on the LP, receiving and burning $Y(X) = \Lt - \kInv/(\Ls + (1 - f_b) X)$ tokens, where $f_b = 0.001$ is the buy-side hook fee. State transition: $(\Tres, \Sup - Y(X))$. Floor: $\Tres/(\Sup - Y(X)) \geq \Tres/\Sup$, with strict inequality iff $Y(X) > 0$, which holds for any $X > 0$ provided $\Ls$ is finite and positive.
+
+\textbf{Case 3 --- $\text{Redeem}(N)$ with $1 \leq N \leq \Sup$.} By Lemma~\ref{lem:integer-redemption}, $\Floor_{\mathrm{new}} \geq \Floor_{\mathrm{old}}$, with equality iff $\Sup \mid N \cdot \Tres$. For the abstract rational ideal $\Floor = \Tres/\Sup$, the floor is preserved exactly; under integer truncation, the floor strictly rises by a sub-unit residual that accrues to the treasury.
+
+\textbf{Case 4 --- $\text{LPBuy}(X_{\text{in}})$ from an external user.} The user sends $X_{\text{in}}$ stable to the LP and receives tokens out. The LP reserves change; the treasury and total supply are untouched. State transition: $(\Tres, \Sup)$, so $\Floor' = \Floor$. Equality holds in every instance.
+
+\textbf{Case 5 --- $\text{LPSell}(N_{\text{in}})$ from an external user, with the hook's 3\% fee on input.} Let $f_s = 0.03$ be the sell-side fee. The hook deducts $f_s \cdot N_{\text{in}}$ from the input before the curve, folding the deducted amount into $\Phit$. The remaining $(1 - f_s) N_{\text{in}}$ swaps through the curve. State transition: $(\Tres, \Sup, \Lt + (1 - f_s) N_{\text{in}}, \Ls - \Delta\Ls, \Phit + f_s N_{\text{in}}, \Phis)$, where $\Delta\Ls = \Ls - \kInv/(\Lt + (1 - f_s) N_{\text{in}})$ is the stable amount sent to the seller. The treasury and total supply are unchanged, so $\Floor' = \Floor$ at the moment of the swap. The fee tokens reside in the v4 fee accumulator and are not yet on the protocol's books; they are realized in Case~7.
+
+\textbf{Case 6 --- $\text{Transfer}(N, a \to b)$.} An ERC-20 balance transfer between addresses $a$ and $b$. Treasury, supply, and LP reserves are untouched. $\Floor' = \Floor$ trivially.
+
+\textbf{Case 7 --- $\text{CollectFees}()$.} The function realizes the accrued unrealized fee mass as $(\Kreal, \Ureal) = (\Phit, \Phis)$ and resets both accumulators to zero (the v4 implementation extracts the same quantities from the Q128.128 accumulator scaled by the position's liquidity; see footnote in Section~\ref{sec:formal-state}). The token-side $\Kreal$ is split into $K_b = \lfloor 0.0025 \Kreal \rfloor$ (caller bounty, remains in circulation) and $K_{\text{burn}} = \Kreal - K_b$ (burned). The stable-side $\Ureal$ is split into $U_b = \lfloor 0.0025 \Ureal \rfloor$ (caller bounty) and $U_{\text{treas}} = \Ureal - U_b$ (added to treasury). State transition: $(\Tres + U_{\text{treas}}, \Sup - K_{\text{burn}}, \Lt, \Ls, 0, 0)$. New floor:
+\[
+\Floor' = \frac{\Tres + U_{\text{treas}}}{\Sup - K_{\text{burn}}} \;\geq\; \frac{\Tres}{\Sup} = \Floor,
+\]
+with strict inequality iff $U_{\text{treas}} > 0$ or $K_{\text{burn}} > 0$, which holds whenever any swap has occurred since the previous \texttt{collectFees} call.
+
+\textbf{Exhaustiveness.} The seven cases exhaust $\mathrm{Ops}$ as defined in~\eqref{eq:ops}. The protocol bytecode exposes no other externally callable function that modifies $(\Tres, \Sup, \Lt, \Ls)$: the token has \{\texttt{redeem}, \texttt{burn} (restricted), \texttt{transfer}, \texttt{transferFrom}, \texttt{approve}, \texttt{permit}\}; the treasury has \{\texttt{payRedemption} (restricted)\}; the router has \{\texttt{routeRevenue} (restricted)\}; the hook has \{\texttt{beforeSwap}, \texttt{collectFees}\}. Approval and permit do not modify the state tuple $\sigma$; \texttt{beforeSwap} runs as part of a swap (subsumed by Cases~4 and~5); the restricted functions can be invoked only by the listed callers and so are subsumed by the protocol-initiated operations enumerated above. No other path can reach $\sigma$.
+
+Combining all cases: $\Floor(\sigma') \geq \Floor(\sigma)$ holds for every $\text{op} \in \mathrm{Ops}$, with strict inequality in Cases~1, 2, 7 (and weakly in Case~3 under the abstract ideal, strictly under integer arithmetic with $r > 0$), and equality in Cases~4--6. $\qed$
+\end{proof}
+
+\subsection{Closure under composition}
+\label{sec:formal-closure}
+
+\begin{corollary}[Closure under Arbitrary Interleaving]
+\label{cor:closure}
+For any finite sequence $\text{op}_1, \text{op}_2, \ldots, \text{op}_m \in \mathrm{Ops}$ applied to a reachable state $\sigma$, the resulting state $\sigma_m = \text{op}_m \circ \cdots \circ \text{op}_1(\sigma)$ satisfies $\Floor(\sigma_m) \geq \Floor(\sigma)$.
+\end{corollary}
+
+\begin{proof}
+By induction on $m$. The base case $m = 0$ is trivial. For the inductive step, $\Floor(\sigma_m) \geq \Floor(\sigma_{m-1}) \geq \Floor(\sigma)$ by Theorem~\ref{thm:floor-monotonicity} and the induction hypothesis. $\qed$
+\end{proof}
+
+Corollary~\ref{cor:closure} matters because it absorbs the intra-block ordering ambiguity exploited by MEV searchers. Any reordering or insertion of in-protocol operations between Case~5's swap and Case~7's realization can only weakly raise the floor at the realization moment; no adversarial schedule of $\mathrm{Ops}$ elements can produce $\Floor(\sigma_m) < \Floor(\sigma)$. This is distinct from the standard MEV-victim framing in which sandwich attacks degrade a target user's outcome---in M\textsuperscript{2}, the floor invariant is robust to all such reorderings; what an MEV searcher can extract is a portion of the swap surplus that would otherwise have accrued to the LP, not value from the floor.
+
+\subsection{Redemption fairness}
+\label{sec:formal-fairness}
+
+\begin{theorem}[Redemption Fairness, No First-Mover Advantage]
+\label{thm:redemption-fairness}
+Let two holders, $a$ and $b$, simultaneously submit redemption transactions for $N_a, N_b$ tokens against a state $\sigma$. Let any miner-/builder-chosen ordering execute these (and possibly other in-protocol operations) sequentially, yielding payouts $P_a^{(\pi)}, P_b^{(\pi)}$ under ordering $\pi$. Then for every ordering $\pi$ in which $a$ executes before $b$:
+\begin{equation}
+P_a^{(\pi)} / N_a \;\leq\; P_b^{(\pi)} / N_b.
+\label{eq:fairness}
+\end{equation}
+That is, the per-token payout for the later redeemer is weakly higher than that of the earlier redeemer; no first-mover advantage exists in floor terms.
+\end{theorem}
+
+\begin{proof}
+The per-token payout for a redemption is the floor evaluated at that redemption's block-state. By Theorem~\ref{thm:floor-monotonicity} Case~3 (and Lemma~\ref{lem:integer-redemption} for the integer-arithmetic refinement), $a$'s redemption preserves or raises the floor; by Corollary~\ref{cor:closure}, any intervening operations preserve or raise it further. Therefore $b$'s redemption evaluates the floor at a value at least as high as $a$'s did, establishing~\eqref{eq:fairness}. $\qed$
+\end{proof}
+
+\paragraph{Contrast with classical bank-run dynamics.} The \citet{ChenGoldsteinJiang2010} first-mover advantage is structurally absent in M\textsuperscript{2}; the formal contrast appears in Section~\ref{sec:econ-bank-run}.
+
+\paragraph{What the theorem does not promise.} Theorem~\ref{thm:redemption-fairness} concerns the floor, not the absolute dollar amount a holder receives in alternative dollar terms (e.g., spot-market value of the burned tokens). A holder who could have sold at spot above the floor accepts an opportunity cost by redeeming. The theorem also does not preclude an MEV-style reordering in which $a$'s submitted redemption is preceded by an opportunistically-inserted operation; under Corollary~\ref{cor:closure}, such an insertion can only \emph{help} the redeemer relative to their own submission-state evaluation, because the floor can only weakly rise.
+
+\subsection{LVR / floor-capture identity}
+\label{sec:formal-lvr}
+
+The Loss-Versus-Rebalancing (LVR) framework of \citet{MilionisMoallemiRoughgarden2023} characterizes the cost an AMM LP incurs from supplying liquidity against informed arbitrageurs trading on an external venue. In the standard framing, LVR is a loss to the LP that is captured by arbitrageurs. For the protocol-owned LP position in M\textsuperscript{2}, this framing appears to invert. We state the inversion as a \emph{conjecture} rather than a theorem: the proof of a quantitative identity requires a careful unit reconciliation between LVR's per-unit-time dollar-flow formulation and M\textsuperscript{2}'s cumulative-floor formulation that we have not yet completed.
+
+\begin{conjecture}[LVR / Floor-Capture Identity]
+\label{conj:lvr-capture}
+Let $\mathrm{LVR}_{[t_0, t_1]}$ denote the cumulative loss-versus-rebalancing of the protocol-owned LP position over an interval $[t_0, t_1]$, in the sense of \citet{MilionisMoallemiRoughgarden2023}. Under the asymmetric-fee mechanism of Section~\ref{sec:protocol-hook} with $f_b = 0.001$ on buys and $f_s = 0.03$ on sells, the LVR-equivalent value of the protocol-owned LP position is recovered as floor growth via the Case~5 plus Case~7 composition of Theorem~\ref{thm:floor-monotonicity}, modulo a leakage of at most $0.25\%$ per side at \texttt{collectFees} realization. In particular, on any interval $[t_0, t_1]$ over which \texttt{collectFees} is invoked at least once,
+\begin{equation}
+\Delta \Floor_{[t_0, t_1]} \cdot \Sup(t_1) \;\gtrsim\; (1 - 0.0025) \cdot \mathrm{LVR}^{\text{fee-attributable}}_{[t_0, t_1]},
+\label{eq:lvr-capture}
+\end{equation}
+where $\Delta \Floor_{[t_0, t_1]}$ is the cumulative floor increase attributable to swap-induced fee growth realized via \texttt{collectFees} in the same interval, and the right-hand side is the portion of cumulative LVR that the asymmetric fee mechanism converts into protocol-realizable fee growth.
+\end{conjecture}
+
+\paragraph{Discussion.} The conjecture is directional rather than a quantitative identity. The intuition is the standard inversion: in the canonical LP-vs-arbitrageur setting LVR is value extracted from the LP by an external trader; for the protocol-owned LP the same swap surplus is folded into the v4 fee accumulator and realized to the treasury (stable side) or burned (token side) at the next \texttt{collectFees}, raising $\Floor = \Tres/\Sup$ on both legs. Converting~\eqref{eq:lvr-capture} into a theorem requires three steps we have not completed: (i) a unit reconciliation between the continuous-time stochastic-calculus framing of LVR (an instantaneous dollar flow per unit of LP liquidity) and the discrete event-driven framing of $\Floor$ growth at \texttt{collectFees} ticks; (ii) a careful accounting of the per-swap fee asymmetry, which makes the buy-leg and sell-leg contributions to $\Delta \Floor$ structurally different (the buy fee accrues to $\Phis$ and routes to treasury; the sell fee accrues to $\Phit$ and routes to burn); and (iii) verifying that no value leaks outside the (fee-collection bounty, MEV) channels already accounted for in Theorems~\ref{thm:floor-monotonicity} and~\ref{thm:mev-bound}. We identify the completion of this proof as an open problem (Section~\ref{sec:lim-open-math}, problem~(P6)) and note that even the directional conjecture is sufficient for the qualitative argument in Section~\ref{sec:related-formal}: the protocol-owned LP is the structural object that converts LVR from a loss-to-LP into floor growth captured by the holder base.
+
+\subsection{Mechanized verification path}
+\label{sec:formal-mechanized}
+
+We have given a paper proof. End-to-end mechanized verification of Theorem~\ref{thm:floor-monotonicity} against the deployed Solidity bytecode is a separate exercise, which we sketch here and defer to follow-up work.
+
+Three tool stacks are candidates. \textbf{Halmos} \citep{Tolmach2022} performs symbolic execution of EVM bytecode and discharges quantified properties of the form ``for all reachable states, $P$ holds.'' The floor invariant fits this template: we specify the property as a postcondition over $(\Tres, \Sup)$ and run Halmos on each entry point. \textbf{Certora's Prover} expresses invariants in CVL and proves them by SMT-backed symbolic execution; its strength is composing per-function rules into contract-level invariants via the \texttt{invariant} keyword. \textbf{The K framework} \citep{Tolmach2022} gives the deepest semantics-level guarantee at the cost of greater specification overhead.
+
+The non-trivial cases for any of these tools are Cases~5 and~7, where the floor invariant holds only after the temporal pairing of the swap with the subsequent \texttt{collectFees}. We propose specifying this as a two-state invariant over reachable pairs $(\sigma_t, \sigma_{t+\text{collect}})$, with the intermediate-state property weakened to ``floor non-decreasing modulo accrued fee growth.'' This is a known idiom in the formal-verification literature and is supported by all three stacks. We will report mechanized results in the empirical follow-up paper.

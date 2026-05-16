@@ -1,0 +1,192 @@
+% ============================================================
+\section{Economic Analysis}
+\label{sec:economic-analysis}
+
+The proofs of Section~\ref{sec:formal-invariants} establish a structural floor-monotonicity property: no protocol-defined operation can lower the floor. They do not yet address \emph{what an adversary chooses to do} when faced with the protocol. This section formalizes the adversarial decision problem as a redemption-versus-dump coordination game (a structural counterpoint to Diamond--Dybvig, whose multiple-equilibrium dynamics fail to obtain in M\textsuperscript{2}), characterizes the profit-maximizing composition of LP-dump and redemption strategies, derives the closed-form saturation point above which the dump-portion of any optimal strategy is bounded, contrasts the resulting dynamics with the Terra--Luna collapse \citep{LiuMakarovSchoar2023}, and analyzes the system's behavior under operator-revenue cessation through a closed-end-fund analog \citep{CherkesSagiStanton2009}. We also state the LP-exhaustion, MEV-leakage, and collect-fees-equilibrium results referenced in Section~\ref{sec:protocol}.
+
+\subsection{The two exit paths}
+\label{sec:econ-two-exits}
+
+A holder of $N$ tokens, at state $\sigma = (\Tres, \Sup, \Lt, \Ls)$, has two protocol-defined exit channels. The \emph{redemption channel} burns the $N$ tokens and pays out $N \cdot \Floor$ stable from the treasury; by Theorem~\ref{thm:floor-monotonicity} Case~3, this preserves the floor exactly (and strictly raises it by a sub-unit residual under integer arithmetic; Lemma~\ref{lem:integer-redemption}). The \emph{LP-dump channel} routes the $N$ tokens through the AMM's sell side, where the hook deducts a $f_s = 3\%$ fee on input before the constant-product curve is applied. The holder may also mix the two strategies---redeem a fraction $1 - \alpha$ and dump a fraction $\alpha$, for any $\alpha \in [0, 1]$. The adversary's decision problem is to choose $\alpha$ to maximize total stable proceeds. We restrict attention throughout this subsection to \emph{simultaneous} strategies in which the attacker's dump and redemption occur in a single block, without an intervening \texttt{collectFees} realization; the strictly more permissive sequenced class is treated in the discussion following Theorem~\ref{thm:bank-run}.
+
+Writing $M = \alpha N$ for the tokens routed to the LP, the LP payout function is
+\begin{equation}
+\pi_{\text{LP}}(M) \;=\; \Ls \;-\; \frac{\kInv}{\Lt + (1 - f_s) M},
+\label{eq:lp-payout}
+\end{equation}
+which is strictly concave in $M$ on $M \geq 0$, with $\pi_{\text{LP}}(0) = 0$, $\pi_{\text{LP}}'(0) = (1 - f_s) \Ls/\Lt = (1 - f_s) \Spot$, and $\lim_{M \to \infty} \pi_{\text{LP}}(M) = \Ls$. The redemption payout is linear: $\pi_{\text{R}}(N - M) = (N - M) \Floor$. The total attacker yield as a function of the strategy $\alpha$ is
+\begin{equation}
+\Pi(\alpha; N, \sigma) \;=\; \pi_{\text{LP}}(\alpha N) \;+\; (1 - \alpha) N \Floor.
+\label{eq:total-yield}
+\end{equation}
+$\Pi$ is concave in $\alpha$ on $[0, 1]$ (the LP term is concave; the redemption term is linear), so the maximum is attained either at a boundary or at the unique interior critical point.
+
+\subsection{Saturation and the run-resistance theorem}
+\label{sec:econ-bank-run}
+
+Differentiating~\eqref{eq:total-yield} in $\alpha$ and setting the result to zero gives the interior optimum,
+\begin{equation}
+(\Lt + (1 - f_s) \alpha^* N)^2 \;=\; \frac{\kInv (1 - f_s)}{\Floor},
+\label{eq:foc}
+\end{equation}
+which after rearrangement yields the saturation quantity
+\begin{equation}
+\boxed{\;A^* \;:=\; \alpha^* N \;=\; \frac{1}{1 - f_s}\left(\sqrt{\frac{\kInv (1 - f_s)}{\Floor}} \;-\; \Lt\right).\;}
+\label{eq:saturation}
+\end{equation}
+The key structural fact is that $A^*$ depends only on the state $\sigma$, \emph{not on the adversary's holdings $N$.} The optimal dump quantity is a property of the AMM and the floor, not of the attacker's size.
+
+\begin{theorem}[Composite-Strategy Bank Run with Saturation]
+\label{thm:bank-run}
+Within the simultaneous-strategy class of Section~\ref{sec:econ-two-exits}, at state $\sigma$, let $A^*$ be the saturation quantity~\eqref{eq:saturation} and let $\Pi^*(N; \sigma) = \max_{\alpha \in [0, 1]} \Pi(\alpha; N, \sigma)$ be the attacker's value function on holdings $N$. Then:
+\begin{enumerate}
+\setcounter{enumi}{-1}
+\item \emph{(Pre-saturation regime.)} If $A^* \leq 0$---equivalently $(1 - f_s)\Spot \leq \Floor$, a near-launch or fee-suppressed-spot state in which the post-fee LP spot does not exceed the floor---the optimum is $\alpha^* = 0$ (pure redemption); pure redemption strictly dominates any positive dump under the asymmetric sell fee. The value is $\Pi^*(N) = N \Floor$.
+\item \emph{(Pure-dump regime.)} If $0 < A^*$ and $N \leq A^*$, the optimum is $\alpha^* = 1$ (pure LP dump). The value is $\Pi^*(N) = \pi_{\text{LP}}(N) = \Ls - \kInv/(\Lt + (1 - f_s) N)$.
+\item \emph{(Mixed regime.)} If $N > A^*$, the optimum is $\alpha^* = A^*/N \in (0, 1)$, with dump quantity exactly $A^*$ and redemption quantity $N - A^*$. The value is
+\begin{equation}
+\Pi^*(N) \;=\; (N - A^*) \Floor \;+\; \Big[\Ls - \sqrt{\kInv \Floor / (1 - f_s)}\Big].
+\label{eq:mixed-value}
+\end{equation}
+\item \emph{(Bounded run premium.)} For any $N > A^*$, the run premium over pure redemption,
+\begin{equation}
+\Delta^* \;:=\; \Pi^*(N) - N \Floor \;=\; \Big[\Ls - \sqrt{\kInv \Floor / (1 - f_s)}\Big] - A^* \Floor,
+\label{eq:run-premium}
+\end{equation}
+is a state-only constant, independent of $N$. The expression admits the equivalent closed forms
+\begin{equation}
+\Delta^* \;=\; \left(\sqrt{\Ls} - \sqrt{\Lt \Floor/(1-f_s)}\right)^2
+\;=\; \Ls \cdot \left(1 - \sqrt{\Floor/((1-f_s)\Spot)}\right)^2,
+\label{eq:run-premium-closed}
+\end{equation}
+which expose two structural facts: $\Delta^*$ vanishes whenever the post-fee LP spot $(1-f_s)\Spot$ approaches the floor $\Floor$, and the bound is structurally tight rather than $\Delta^* \leq \Ls$ in the worst case. At the canonical month-12 state, $\Floor/((1-f_s)\Spot) \approx 0.7637$ and $\Delta^*/\Ls \approx 1.59\%$ (not $100\%$).
+\item \emph{(Asymptotic redemption.)} $\Pi^*(N) / N \to \Floor$ as $N \to \infty$. The marginal value of an additional held token, beyond what pure redemption returns, decays to zero.
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}
+By concavity of $\Pi$ in $\alpha$, the unconstrained maximizer~\eqref{eq:foc} is the unique critical point. If $\alpha^* \geq 1$ (equivalently $A^* \geq N$), the constraint binds at $\alpha = 1$, giving regime~1. Otherwise the interior solution gives regime~2 with dump quantity $\alpha^* N = A^*$, a state-only constant. Substituting $\alpha^* = A^*/N$ into~\eqref{eq:total-yield} and simplifying using $\Lt + (1 - f_s) A^* = \sqrt{\kInv (1 - f_s)/\Floor}$ from~\eqref{eq:foc} yields~\eqref{eq:mixed-value}. The run premium~\eqref{eq:run-premium} is the constant tail in~\eqref{eq:mixed-value} after subtracting $N \Floor$. To obtain the closed form~\eqref{eq:run-premium-closed}, set $\beta = \sqrt{(1-f_s)/\Floor}$ and use $\kInv = \Lt \Ls$ to write $\sqrt{\kInv \Floor/(1-f_s)} = \sqrt{\Lt \Ls}/\beta$ and $A^* \Floor = (1/\beta^2)(\beta \sqrt{\Lt \Ls} - \Lt) = \sqrt{\Lt\Ls}/\beta - \Lt/\beta^2$, so
+\[
+\Delta^* \;=\; \Ls - \frac{2\sqrt{\Lt \Ls}}{\beta} + \frac{\Lt}{\beta^2} \;=\; \left(\sqrt{\Ls} - \sqrt{\Lt}/\beta\right)^2 \;=\; \left(\sqrt{\Ls} - \sqrt{\Lt\Floor/(1-f_s)}\right)^2.
+\]
+The second form in~\eqref{eq:run-premium-closed} follows by factoring $\sqrt{\Ls}$ and using $\Spot = \Ls/\Lt$. The asymptote in~(4) is immediate from $\Pi^*(N)/N = \Floor + \Delta^*/N \to \Floor$. $\qed$
+\end{proof}
+
+\paragraph{Structural interpretation of $\Delta^*$.} The closed form~\eqref{eq:run-premium-closed} shows that $\Delta^*$ is the LP's ``excess depth above the no-arbitrage curve'' at the asymmetric-fee-adjusted spot price. It scales with how far the post-fee spot $(1-f_s)\Spot$ exceeds the floor $\Floor$, not with $\Ls$ in the worst case: when the spot has been compressed by sustained selling so that $(1-f_s)\Spot \to \Floor$, the structural advantage of dumping over pure redemption vanishes entirely.
+
+\paragraph{Sequenced strategies.} The simultaneous-strategy restriction of Theorem~\ref{thm:bank-run} excludes strategies in which the attacker interleaves \texttt{collectFees} between the dump and the redemption. In a sequenced strategy, the attacker dumps $A^*$ tokens, waits (or pays) for a \texttt{collectFees} call that realizes the token-side fees the attacker's own dump just deposited into $\Phit$, and only then redeems the remaining $N - A^*$ tokens against a now-higher floor. The marginal benefit over the simultaneous strategy is the floor increment $\Delta\Floor$ realized between dump and redemption, multiplied by the attacker's residual holdings $N - A^*$. At the canonical month-12 state, the dump of $A^* \approx 6.20 \cdot 10^7$ tokens deposits $f_s A^* \approx 1.860 \cdot 10^6$ tokens into $\Phit$, of which a fraction $1 - 0.0025$ (the caller bounty leaks the rest) is burned at the next \texttt{collectFees}; supply falls by $\approx 1.855 \cdot 10^6$ tokens, and the floor rises by $\Delta\Floor = \Tres/(\Sup - 1.855 \cdot 10^6) - \Tres/\Sup \approx \$6.698 \cdot 10^{-6}$ per token. The maximal sequenced premium, attained when the attacker initially holds the entire circulating supply $N = \Sup$, is $(N - A^*) \cdot \Delta\Floor \approx 6.047 \cdot 10^8 \cdot \$6.698 \cdot 10^{-6} \approx \$4{,}050$, an $18.9\%$ improvement on $\Delta^*$. Two structural observations: (i) the sequenced benefit \emph{is} a function of the attacker's holdings $N$, so the ``state-only constant'' claim of Theorem~\ref{thm:bank-run}(3) does not extend to the sequenced class; (ii) the per-held-token benefit is bounded above by $\Delta\Floor$ (a state-only quantity), so the simultaneous-class asymptote $\Pi^*(N)/N \to \Floor$ of part~(4) is replaced in the sequenced class by $\Pi^*_{\text{seq}}(N)/N \to \Floor + \Delta\Floor$---a strictly higher but still state-only-bounded asymptote. At canonical state this is $\Floor + 6.7 \cdot 10^{-6}$, a $0.28\%$ asymptotic premium per token. The qualitative ``no first-mover advantage'' content of Theorem~\ref{thm:redemption-fairness} is preserved, since the bound on the per-token gain remains independent of $N$. The closed-form supremum across the full sequenced strategy class---in which the attacker may interleave LP dumps, \texttt{collectFees} calls, and redemptions within or across blocks---is left as an open problem (Section~\ref{sec:lim-open-math}, P7); a full treatment requires modeling the equilibrium response of the \texttt{collectFees}-bounty payer and the v4 fee-realization timing dynamics.
+
+\paragraph{Numerical illustration at the canonical month-12 state.} At the values produced by the deterministic 12-month projection of Section~\ref{sec:numerical-results}---$\Tres = \$1.6\text{M}$, $\Sup = 2 \cdot 10^9 / 3 \approx 6.667 \cdot 10^8$, $\Floor = \$0.0024$ exactly, $\Lt = 1.25 \cdot 10^9 / 3 \approx 4.167 \cdot 10^8$, $\Ls = \$1.35\text{M}$, $\kInv = \Lt \Ls = 5.625 \cdot 10^{14}$, $f_s = 0.03$---equation~\eqref{eq:saturation} gives
+\begin{equation*}
+\sqrt{\tfrac{\kInv (1-f_s)}{\Floor}} = \sqrt{2.273\overline{4} \cdot 10^{17}} \approx 4.76806 \cdot 10^8, \qquad A^* \approx 6.1999 \cdot 10^7 \text{ tokens},
+\end{equation*}
+which is about $9.30\%$ of the circulating supply. Equation~\eqref{eq:run-premium} then evaluates as
+\begin{equation*}
+\Delta^* = \underbrace{\$1{,}350{,}000}_{\Ls} - \underbrace{\sqrt{\tfrac{\kInv \Floor}{1-f_s}}}_{\approx \$1{,}179{,}725.64} - \underbrace{A^* \Floor}_{\approx \$148{,}797.80} \approx \$21{,}476.56.
+\end{equation*}
+The closed-form value, computed in 60-digit decimal arithmetic, is $\Delta^* = \$21{,}476.5621\ldots$; the figures in the paper are rounded to the nearest cent. Even an adversary with the entire circulating supply $N = \Sup$ can extract at most $N \Floor + \Delta^* \approx \$1{,}621{,}476.56$ from the system---this is the treasury balance plus a residual constant bounded above by $\Ls$.
+
+\paragraph{Pure-strategy crossover.} A naive pure-strategy analysis would equate the two pure-strategy yields $\pi_{\text{LP}}(N) = N \Floor$ to find a crossover $N^{\text{cross}}$ where pure dump and pure redemption yield the same proceeds; numerically at the canonical month-12 state, $N^{\text{cross}} \approx 1.33 \cdot 10^8$. Theorem~\ref{thm:bank-run} subsumes this: the saturated mixed strategy of regime~(2) yields more than either pure strategy whenever $N > A^*$, so the pure-strategy crossover is informationally inferior to~\eqref{eq:run-premium} as a characterization of the attacker's optimal yield.
+
+\paragraph{Diamond--Dybvig contrast.} The classical \citet{DiamondDybvig1983} model produces multiple-equilibrium bank-run dynamics because the bank's reserves are finite and patient depositors strictly lose if impatient depositors redeem first. In M\textsuperscript{2}, by Theorem~\ref{thm:redemption-fairness}, later redeemers weakly dominate earlier redeemers in floor terms; by Theorem~\ref{thm:bank-run}(3), the total adversarial premium over redemption is bounded by a state-only constant; and by Theorem~\ref{thm:floor-monotonicity}, no operation in $\mathrm{Ops}$ reduces the floor. The strategic-complementarity channel of \citet{ChenGoldsteinJiang2010} (early redeemers extract value from later ones) is structurally absent. The M\textsuperscript{2} ``run'' is a single-equilibrium game in which the rational strategy converges to pure redemption as $N$ grows, and the system's terminal state under a complete-redemption attack is the same as its terminal state under no attack at all: the LP retains its $\kInv$, the treasury drains in lockstep with supply burn, and the per-token floor is preserved.
+
+\subsection{Disanalogy with the Terra--Luna collapse}
+\label{sec:econ-terra}
+
+The Terra--Luna collapse \citep{LiuMakarovSchoar2023,Briola2023} is the standard cautionary tale of an algorithmic-stablecoin system that entered a reflexive death spiral under coordinated redemption pressure. The mechanism: UST redemption minted LUNA at the prevailing LUNA price, so a coordinated UST sell increased LUNA supply, lowering LUNA price, which further raised the LUNA quantity minted per UST burned, and so on. The endogenous-collateral structure produced a positive feedback loop in which redemption amplified its own pressure.
+
+The M\textsuperscript{2} disanalogy is structural along three axes:
+\begin{enumerate}
+\item \emph{Collateral exogeneity.} The M\textsuperscript{2} treasury holds a single deployer-chosen USD-pegged ERC-20 (e.g.\ USDC, DAI). The protocol does not mint the backing stable. There is no endogenous-collateral feedback channel of the Terra--LUNA kind because the backing asset's supply and price are not protocol-determined.
+\item \emph{One-way treasury inflow.} Redemption removes stable from the treasury only in lockstep with burning the redeemed tokens. The per-token claim $\Floor = \Tres/\Sup$ is therefore invariant across redemption events, by Lemma~\ref{lem:integer-redemption}. In Terra--LUNA, redemption changed both legs (UST supply down, LUNA supply up) by ratios that did not preserve any analogous invariant.
+\item \emph{No pegging mechanism.} M\textsuperscript{2} is not a stablecoin and has no peg target. The AMM spot price floats; only the floor is invariant-protected. Terra--LUNA's collapse depended on the loss of confidence in a peg target; M\textsuperscript{2} has no target to lose.
+\end{enumerate}
+The closest TradFi analog of M\textsuperscript{2} is a closed-end fund holding U.S. dollars in custody with continuous NAV redemption \citep{LeeShleiferThaler1991,CherkesSagiStanton2009}. The closest \emph{negative} analog is Terra--LUNA. The crucial design choice that places M\textsuperscript{2} in the first category and not the second is the exogeneity of the backing asset.
+
+\subsection{Operator-revenue cessation and the CEF analog}
+\label{sec:econ-operator}
+
+The growth of the floor depends on the operator's continued routing of business revenue. If the operator stops depositing (whether by choice, bankruptcy, or third-party disruption), revenue inflow becomes zero. We characterize the system's degradation under this regime through a closed-end-fund analog.
+
+\begin{theorem}[Spot--Floor Convergence under Zero Revenue]
+\label{thm:spot-floor-convergence}
+Suppose the operator deposits no revenue from time $t_0$ onward. Let $D(t) := \Spot(t) - \Floor(t)$. Then:
+\begin{enumerate}
+\item \emph{(Floor stickiness.)} $\Floor(t)$ is non-decreasing in $t$ (Theorem~\ref{thm:floor-monotonicity}). Strict increases occur only on \texttt{collectFees} invocations realizing organic-flow fees.
+\item \emph{(Spot floor via arbitrage.)} Under any positive-probability arbitrageur path---arbitrageurs are available to buy on the LP whenever $\Spot < \Floor$---we have $\Spot(t) \geq \Floor(t)$ for all $t \geq t_0$. Equivalently, $D(t) \geq 0$.
+\item \emph{(Convergence under net-sell pressure.)} Suppose that after $t_0$ the cumulative non-arbitrage sell volume strictly exceeds the cumulative non-arbitrage buy volume in expectation, while arbitrageurs remain available to buy whenever $\Spot < \Floor$ as in~(2). Then $\Spot(t)$ is non-increasing in expectation outside arbitrage events (non-arbitrage sells push it down; arbitrage entry prevents it from settling below the floor), $\Floor(t)$ is non-decreasing, and $D(t)$ converges to a limit bounded above by the arbitrage threshold $f_b \cdot \Floor \approx 10$ basis points of $\Floor$ (the minimum gap at which a one-dollar-sized arbitrage round-trip is profitable; smaller trades face proportionally larger relative gas costs).
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}[Proof sketch]
+(1) Direct from Theorem~\ref{thm:floor-monotonicity}: in the zero-revenue regime, only Cases~3, 4, 5, 6, 7 of the operation set are exercised, and none lowers the floor. (2) Suppose for contradiction $\Spot(t) < \Floor(t)$. An arbitrageur can buy on the LP at $\Spot$ (paying the 0.10\% buy fee), redeem against the treasury at $\Floor$, and net a profit of $(\Floor - \Spot)/\Spot - 0.001$ per dollar deployed---positive whenever the gap exceeds 10 basis points. The buy raises $\Spot$ and the redemption preserves $\Floor$; the gap is closed by the assumed positive-probability path. (3) Non-arbitrage sells lower $\Spot$ along the AMM curve; the floor either stays flat or rises on \texttt{collectFees}. Whenever spot would drop more than $f_b \cdot \Floor$ below floor, the arbitrage of~(2) is triggered (an arbitrageur buys back on the LP and redeems against the treasury), pinning spot from below at $\Floor (1 - f_b)$ up to the buy-fee threshold. The two quantities approach each other monotonically, with $D(t)$ converging to a limit bounded above by $f_b \cdot \Floor$ (the per-dollar break-even threshold of the arbitrage round-trip). The terminal regime is reached either when the LP exhausts its stable reserve or when the arbitrage rounds the gap to within the $f_b$ threshold. $\qed$
+\end{proof}
+
+In words: when revenue stops, M\textsuperscript{2} degrades to a CEF whose NAV is monotone-nondecreasing in time (from any residual \texttt{collectFees} activity) and whose secondary market converges to NAV. This is strictly stronger than any TradFi CEF, where the persistent discount-to-NAV documented by \citet{LeeShleiferThaler1991} and \citet{Pontiff1996} reflects the absence of a contractual NAV-redemption mechanism. The protocol's invariants are silent on operator \emph{fraud} (revenue collected but routed elsewhere); the threat-model boundary appears in Section~\ref{sec:protocol-threat-model} and the real-world mitigations in Section~\ref{sec:lim-operator}.
+
+\subsection{LP exhaustion asymptotics}
+\label{sec:econ-lp}
+
+Under deterministic monthly buy-and-burn of constant size $B$ stable, the LP's stable reserve grows linearly while its token reserve decays hyperbolically.
+
+\begin{theorem}[LP Half-Life]
+\label{thm:lp-half-life}
+Let $L_{s,0}, L_{t,0}$ be the genesis LP reserves and $\kInv = L_{t,0} L_{s,0}$ the constant-product invariant. Assume deterministic monthly buy size $B$ stable into the LP for $n$ months (ignoring intervening organic flow). Then $\Ls(n) = L_{s,0} + nB$, $\Lt(n) = \kInv/(L_{s,0} + nB)$, and the token-side half-life---the smallest $n_{1/2}$ such that $\Lt(n_{1/2}) \leq L_{t,0}/2$---is
+\begin{equation}
+n_{1/2} \;=\; L_{s,0} / B.
+\label{eq:lp-half-life}
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+The hook's buy-and-burn execution preserves $\kInv$ (the asymmetric 0.10\% buy fee is folded into $\Phis$ and realized only at \texttt{collectFees}; on the swap itself, $\kInv$ is preserved). Each monthly buy adds $B$ stable to the active reserves, so $\Ls(n) = L_{s,0} + nB$. From $\kInv = \Lt(n) \Ls(n)$, $\Lt(n) = \kInv/\Ls(n) = L_{t,0} L_{s,0}/(L_{s,0} + nB)$. Setting $\Lt(n_{1/2}) = L_{t,0}/2$ gives $L_{s,0}/(L_{s,0} + n_{1/2} B) = 1/2$, i.e., $n_{1/2} = L_{s,0}/B$. $\qed$
+\end{proof}
+
+At the canonical genesis ($L_{s,0} = \$750{,}000$) and $B = \$50{,}000$/month (the 50\% buy-and-burn slice of \$100k/month revenue), $n_{1/2} = 15$ months. The system's transition from ``tradable token'' to ``redemption-dominant'' regime is a deterministic function of the revenue rate and is plotted in Figure~\ref{fig:revenue-sweep} (right axis: $n_{1/2}(R)$ over the revenue sweep).
+
+\subsection{Collect-fees calling equilibrium}
+\label{sec:econ-collect}
+
+The \texttt{collectFees} function is permissionless and pays a 0.25\%-per-side bounty to the caller. The calling cadence is determined by a deterministic competitive race among potential callers.
+
+\begin{theorem}[Calling Equilibrium under Atomless Competition]
+\label{thm:collect-equilibrium}
+Let $\beta$ be the steady-state per-unit-time rate of fee accumulation in the v4 accumulator (a function of swap volume, the asymmetric fee, and the position's liquidity share), and $g$ the gas-plus-search cost of a \texttt{collectFees} call. Assume atomless risk-neutral competition among potential callers: infinitely many would-be callers each willing to call at the first profitable moment. Then the equilibrium inter-call interval $\Delta t^*$ satisfies the Bertrand-style break-even condition
+\begin{equation}
+0.0025 \cdot \beta \cdot \Delta t^* \;=\; g,
+\qquad
+\text{i.e.,} \qquad
+\Delta t^* \;=\; \frac{g}{0.0025 \,\beta}.
+\label{eq:collect-eq}
+\end{equation}
+For $\beta$ growing in swap volume, $\Delta t^*$ shrinks proportionally; in low-volume regimes, $\Delta t^*$ may exceed the protocol's monthly tick, in which case the protocol routes its own buy-and-burn through a fee realization on the same transaction (a path that does not require the bounty).
+\end{theorem}
+
+\begin{proof}[Proof sketch]
+A caller who waits an interval $\Delta t$ earns the deterministically accrued bounty $0.0025 \beta \Delta t$ and pays the fixed cost $g$. Under atomless competition, no caller can wait longer than the first $\Delta t$ at which the bounty covers $g$ without being preempted by a competitor; no caller will call earlier, since doing so yields a strict loss. The standard Bertrand-style indifference under competitive entry pins the equilibrium at the break-even point~\eqref{eq:collect-eq}, with no intertemporal discounting because the equilibrium interval is short relative to the deployer's time horizon. $\qed$
+\end{proof}
+
+\paragraph{Monopoly deviation.} The atomless-competition assumption is the load-bearing piece of the equilibrium. Under monopoly---a single sophisticated keeper who faces no competitive preemption---the equilibrium $\Delta t$ is strictly longer and reflects the keeper's outside option (e.g., capital cost or alternative MEV opportunities). The protocol does not depend on monopoly being absent: the permissionless calling interface remains open to all entrants, and any monopoly rent is bounded above by the gap between the keeper's outside option and the gas cost.
+
+The economic content is that the bounty rate is a knob controlling the trade-off between fee-realization latency (low bounty $\Rightarrow$ long $\Delta t^*$) and value leakage to extractors (high bounty $\Rightarrow$ more value lost per call). The 0.25\%-per-side rate is locked at genesis (Section~\ref{sec:protocol-collect}); we do not optimize over it.
+
+\subsection{MEV leakage on protocol buy-and-burn}
+\label{sec:econ-mev}
+
+Protocol buy-and-burn is in expectation predictable: a monthly cadence with a buy direction. Naive execution into a public mempool is sandwichable. The hook's mitigations (private orderflow, random delay, TWAP) bound the residual leakage.
+
+\begin{theorem}[MEV Leakage Upper Bound]
+\label{thm:mev-bound}
+Let $p \in [0, 1]$ be the probability that a buy-and-burn transaction is included via a private (sealed) route, $N_{\text{TWAP}}$ the TWAP granularity, and $B$ the monthly buy size in stable. Let $\varepsilon_{\text{pub}}(M, \Ls)$ denote the public-mempool sandwich efficiency for a swap of size $M$ against stable reserves $\Ls$, satisfying $\varepsilon_{\text{pub}}(M, \Ls) = O(M/\Ls)$ in the small-impact regime. Then the expected MEV leakage on the monthly buy satisfies
+\begin{equation}
+\mathbb{E}[\mathrm{MEV}] \;\leq\; (1 - p) \cdot \varepsilon_{\text{pub}}(B/N_{\text{TWAP}}, \Ls) \cdot B \;+\; p \cdot \varepsilon_{\text{priv}} \cdot B,
+\label{eq:mev-bound}
+\end{equation}
+where $\varepsilon_{\text{priv}}$ is the (small) private-mempool sandwich efficiency under builder-collusion risk. In particular, for fixed $p$, $\mathbb{E}[\mathrm{MEV}]/B \to p \varepsilon_{\text{priv}}$ as $N_{\text{TWAP}} \to \infty$.
+\end{theorem}
+
+\begin{proof}[Proof sketch]
+With probability $p$ the transaction is in the private channel where only builder-collusion-level adversaries can sandwich, with efficiency $\varepsilon_{\text{priv}}$; with probability $1 - p$ it is in the public mempool where the searcher can sandwich the swap, with efficiency $\varepsilon_{\text{pub}}$ in the swap's quadratic-impact order. Splitting the monthly buy into $N_{\text{TWAP}}$ equal parts reduces each sub-buy's impact to $B/N_{\text{TWAP}}$, on which the sandwich extracts $\varepsilon_{\text{pub}}(B/N_{\text{TWAP}}, \Ls) \cdot B/N_{\text{TWAP}}$, aggregated over $N_{\text{TWAP}}$ sub-buys; the linearity of expectation gives the first term in~\eqref{eq:mev-bound}. The private leg contributes the second term. $\qed$
+\end{proof}
+
+At the design's canonical parameters ($B = \$50\text{k}/\text{month}$, $\Ls \in [\$0.75\text{M}, \$2\text{M}]$ across the first 36 months, $p \approx 0.95$ on Ethereum mainnet via Flashbots Protect, $N_{\text{TWAP}} = 8$), equation~\eqref{eq:mev-bound} predicts $\mathbb{E}[\mathrm{MEV}]/B \lesssim 0.5\%$, well under a $1\%$-of-revenue target. Multi-block MEV under builder collusion is explicitly out of scope (Section~\ref{sec:protocol-threat-model}, Section~\ref{sec:limitations}).

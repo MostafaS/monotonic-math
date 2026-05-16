@@ -1,0 +1,246 @@
+% !TEX TS-program = pdflatex
+% !TEX encoding = UTF-8 Unicode
+%
+% Monotonic Math: A Provably Floor-Preserving Tokenomic Primitive
+% for Revenue-Bearing On-Chain Assets.
+%
+% Currently using article.cls so the source compiles on any LaTeX install.
+% For FC 2027 submission, swap the documentclass line for llncs (see README.md).
+
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+\usepackage{stmaryrd}  % provides \llbracket, \rrbracket used by \contractEval
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{longtable}
+\setlength{\emergencystretch}{6em}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta,calc}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{natbib}
+\usepackage{authblk}
+\usepackage{caption}
+\usepackage[capitalise,noabbrev]{cleveref}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!50!black,
+  citecolor=blue!50!black,
+  urlcolor=blue!50!black,
+}
+
+% ----- Theorem environments (LNCS-portable) -----
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{conjecture}[theorem]{Conjecture}
+
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{assumption}[theorem]{Assumption}
+
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+
+% ----- Notation macros -----
+\newcommand{\Tres}{T}              % Treasury stable
+\newcommand{\Sup}{S}               % Total supply
+\newcommand{\Lt}{L_t}              % LP token reserves
+\newcommand{\Ls}{L_s}              % LP stable reserves
+\newcommand{\Floor}{F}             % Floor price T/S
+\newcommand{\Spot}{P}              % Spot price L_s/L_t
+\newcommand{\kInv}{k}              % Constant-product invariant
+\newcommand{\Phit}{\Phi_t}         % Unrealized token-side fee accumulator
+\newcommand{\Phis}{\Phi_s}         % Unrealized stable-side fee accumulator
+\newcommand{\Kreal}{K}             % Realized token-side fees (gross)
+\newcommand{\Ureal}{U}             % Realized stable-side fees (gross)
+\newcommand{\Qprec}{Q}             % 10^18 precision factor
+\newcommand{\dstab}{d_s}           % Stable's decimals
+\newcommand{\Qstab}{Q_s}           % 10^{d_s}
+\newcommand{\contractEval}[1]{\llbracket #1 \rrbracket}  % Integer-faithful evaluation
+
+% ----- Title block -----
+\title{Monotonic Math: A Provably Floor-Preserving Tokenomic Primitive for Revenue-Bearing On-Chain Assets}
+
+% =================================================================
+% Author block. The named block below is for arXiv/SSRN preprint
+% posting. For FC 2027 double-blind submission, comment the named
+% block and uncomment the anonymous block.
+% =================================================================
+
+% Anonymous (FC 2027 double-blind):
+% \author{Anonymous Submission\thanks{Author identities suppressed for double-blind review.}}
+% \affil{}
+
+% Named (arXiv / SSRN preprint):
+\author{Mostafa Sadjadi\thanks{Correspondence: \texttt{0xmostafas@proton.me}. ORCID: \href{https://orcid.org/0009-0005-2573-3336}{0009-0005-2573-3336}. Funding and conflict-of-interest statements appear in the \emph{Disclosures} section preceding the bibliography.}}
+\affil{Independent Researcher}
+
+\date{Draft, \today}
+
+% ============================================================
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We present \emph{Monotonic Math} (M\textsuperscript{2}), a tokenomic primitive that combines a fixed-supply redemption-backed token, an asymmetric-fee automated market maker, and a hardcoded revenue router to enforce a contractually monotone non-decreasing redemption floor. Under every protocol-defined operation---buy, sell, redeem, transfer, revenue distribution, and fee collection---the per-token claim on a stablecoin reserve is provably non-decreasing. We prove this property by case analysis over the protocol's operation set, and derive a closed-form saturation quantity above which the optimal dump-portion of any \emph{simultaneous} composite attacker strategy is bounded by a state-only constant independent of the attacker's holdings---a Diamond--Dybvig analogue with reversed conclusion: later redeemers weakly dominate earlier ones, and the adversarial premium over pure redemption does not grow with holdings within the simultaneous-strategy class. We characterize the protocol's operating envelope through closed-form deterministic projections and stochastic-revenue sensitivity bands over the four free design parameters, with a Hardhat v3 invariant-test cross-track and a full Monte Carlo against organic-flow processes scheduled for the empirical follow-up. The mechanism is best understood as the composition of three TradFi instruments that do not coexist in any single offering: a closed-end fund with NAV-redemption, a sponsor-funded perpetual buyback, and a Pigovian sell tax recycled into common-pool value. We position the contribution as both a DeFi mechanism-design primitive and a bridge for TradFi capital-return literature into on-chain settings.
+\end{abstract}
+
+\noindent\textbf{Keywords:} tokenomics, decentralized finance, mechanism design, automated market makers, redemption mechanics, capital returns, closed-end funds.
+
+\medskip\noindent\textbf{Reproducibility.} Simulator code and figure-generation scripts: \texttt{[Zenodo DOI to be minted at submission]}. Git tag \texttt{paper-v1} pins the version cited.
+
+% ============================================================
+\input{sections/01-introduction}
+\input{sections/02-related-work}
+\input{sections/03-protocol}
+\input{sections/04-formal-invariants}
+\input{sections/05-economic-analysis}
+\input{sections/06-numerical-results}
+\input{sections/07-comparison}
+\input{sections/08-limitations}
+\input{sections/09-conclusion}
+
+% ============================================================
+\section*{Acknowledgments}
+The author thanks Hamed Kalantari Sarcheshmeh and Sina Hashemi for informal review and feedback on early drafts of this work. Any remaining errors are the author's own.
+
+\section*{Disclosures}
+
+\paragraph{Funding.} This research was conducted independently by the author without external funding.
+
+\paragraph{Conflict of interest.} The author intends to deploy a reference implementation of the M\textsuperscript{2} protocol described in this paper. The mechanism is intended for open-source release as a non-proprietary tokenomics primitive available to any DeFi project; the author claims no proprietary rights over the design and does not hold a financial interest in any specific instance of the protocol beyond the reference deployment. Readers should weigh this intended deployment when interpreting the qualitative framing of the paper, though all quantitative claims are derivable from the protocol specification and the closed-form analysis of Sections~\ref{sec:formal-invariants} and~\ref{sec:economic-analysis} and do not depend on any operational assumption about a specific deployment.
+
+\paragraph{Code and data availability.} The simulator code, figure-generation scripts, and reference contract implementation will be released under an open-source license (license to be finalized at preprint posting) and deposited at the Zenodo DOI referenced in the abstract.
+
+% ============================================================
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\appendix
+% Appendix layout:
+% A. Full proofs (placeholder; the body proofs are in Sections 4-5)
+% B. Symbol table
+% C. Formula reference
+% D. With-fees vs.\ fee-free correction tables
+% E. (FC-only) extended literature discussion (deferred)
+
+% ============================================================
+\section{Symbol Table}
+\label{app:symbols}
+
+For quick reference, Table~\ref{tab:symbols} collects the notation used throughout the paper. Symbols introduced only locally (e.g.\ in a single proof) are not repeated here. Subscripts $(\cdot)_0$ denote genesis values; subscripts $(\cdot)_{\text{old}}/(\cdot)_{\text{new}}$ denote pre/post-operation values; superscript $(\cdot)^*$ denotes an equilibrium or optimum.
+
+\begin{table}[h]
+\centering
+\small
+\caption{Notation used throughout the paper.}
+\label{tab:symbols}
+\begin{tabular}{p{2.6cm} p{10.5cm}}
+\toprule
+\textbf{Symbol} & \textbf{Meaning} \\
+\midrule
+$\Tres$ & Treasury stablecoin balance, in the stable's smallest unit \\
+$\Sup$ & Total token supply (LP-locked + vesting + circulating), in $10^{-18}$-token units \\
+$\Lt, \Ls$ & Active LP reserves (token, stable) on the protocol-owned v4 position \\
+$\Floor = \Tres/\Sup$ & Floor (redemption) price, returned as 18-decimal fixed-point regardless of the stable's native decimals \\
+$\Spot = \Ls/\Lt$ & AMM spot price \\
+$\kInv = \Lt \Ls$ & Constant-product invariant of the LP curve \\
+$\Phit, \Phis$ & Raw unrealized fee mass on the LP position (token, stable), awaiting realization to the protocol on the next \texttt{collectFees} call; v4 stores this as a Q128.128 accumulator (Section~\ref{sec:formal-state}) \\
+$\Kreal, \Ureal$ & Realized fee mass at \texttt{collectFees}, $(\Kreal, \Ureal) = (\Phit, \Phis)$ at the moment of realization \\
+$K_{\text{burn}}, U_{\text{treas}}$ & Net burned tokens / net stable to treasury after the $0.25\%$ caller bounty \\
+$K_b, U_b$ & Caller bounty paid to the \texttt{collectFees} invoker (token, stable) \\
+$f_b, f_s$ & Hook fees on buys ($0.10\%$) and sells ($3\%$) \\
+$N$ & Token quantity held by an attacker or holder \\
+$N_{\text{in}}$ & Token input to an LP sell swap \\
+$X_{\text{in}}$ & Stable input to an LP buy swap \\
+$B$ & Monthly buy-and-burn size in stable ($B = R/2$ at canonical 50/50 split) \\
+$R$ & Monthly revenue routed through \texttt{routeRevenue} \\
+$A^*$ & Saturation quantity in the bank-run analysis (Theorem~\ref{thm:bank-run}); state-only constant \\
+$\Delta^*$ & Run premium over pure redemption; state-only constant (Theorem~\ref{thm:bank-run}) \\
+$N^{\text{cross}}$ & Naive pure-strategy crossover where pure dump and pure redemption yield equal proceeds (Section~\ref{sec:econ-bank-run}) \\
+$n_{1/2}$ & LP token-side half-life (Theorem~\ref{thm:lp-half-life}); $n_{1/2} = L_{s,0}/B$ \\
+$\Delta t^*$ & Equilibrium inter-call interval for \texttt{collectFees} (Theorem~\ref{thm:collect-equilibrium}) \\
+$\beta$ & Per-unit-time fee accumulation rate (Theorem~\ref{thm:collect-equilibrium}) \\
+$g$ & Gas-plus-search cost of a \texttt{collectFees} call \\
+$\Qprec = 10^{18}$ & 18-decimal scaling factor \\
+$\dstab, \Qstab = 10^{\dstab}$ & Backing stable's decimal count and smallest-unit scale \\
+$\contractEval{\cdot}$ & Contract-faithful integer evaluation (vs.\ the abstract rational) \\
+$n$ & Discrete month index since genesis \\
+$t$ & Continuous time (seconds since genesis) \\
+$\mathrm{Ops}$ & Protocol operation set (Section~\ref{sec:formal-state}, Eq.~\eqref{eq:ops}) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ============================================================
+\section{Formula Reference}
+\label{app:formulas}
+
+For quick reference, the load-bearing formulas of Sections~\ref{sec:protocol}--\ref{sec:economic-analysis} are collected below. Cross-references to the source equations and theorems are given in parentheses; this appendix is a digest, not a substitute.
+
+\paragraph{Floor and spot prices.}
+\begin{align*}
+\Floor \;&=\; \Tres / \Sup \qquad &\text{(Section~\ref{sec:protocol-token}, Eq.~\eqref{eq:floor-precision})} \\
+\Spot \;&=\; \Ls / \Lt \qquad &\text{(Section~\ref{sec:protocol-hook})}
+\end{align*}
+
+\paragraph{Redemption payout for $N$ tokens.}
+$$P \;=\; \lfloor N \cdot \Tres / \Sup \rfloor, \quad r \;=\; (N \cdot \Tres) \bmod \Sup \quad (\text{Lemma~\ref{lem:integer-redemption}, Eq.~\eqref{eq:redeem-payout}})$$
+Post-redemption: $\Tres' = \Tres - P$, $\Sup' = \Sup - N$, with $\Floor'/\Floor - 1 = r/(\Tres \cdot \Sup')$ on the integer-arithmetic residual.
+
+\paragraph{LP swap, sell side (with hook fee $f_s$ on token input $N_{\text{in}}$).}
+\begin{align*}
+\text{Stable out:} \quad &\Delta\Ls \;=\; \Ls - \kInv/(\Lt + (1-f_s) N_{\text{in}}) \\
+\text{Fee accrual:} \quad &\Phit \;\to\; \Phit + f_s N_{\text{in}} \quad (\text{Section~\ref{sec:formal-monotonicity}, Case~5})
+\end{align*}
+
+\paragraph{LP swap, buy side (with hook fee $f_b$ on stable input $X_{\text{in}}$).}
+$$\text{Tokens out:} \quad \Delta\Lt \;=\; \Lt - \kInv/(\Ls + (1-f_b) X_{\text{in}}); \qquad \Phis \;\to\; \Phis + f_b X_{\text{in}}$$
+
+\paragraph{\texttt{collectFees} distribution.}
+$$K_b = \lfloor 0.0025 \Kreal \rfloor, \;\; U_b = \lfloor 0.0025 \Ureal \rfloor, \;\; K_{\text{burn}} = \Kreal - K_b, \;\; U_{\text{treas}} = \Ureal - U_b$$
+$(\text{Section~\ref{sec:protocol-collect}, Section~\ref{sec:formal-monotonicity} Case~7})$.
+
+\paragraph{LP half-life under deterministic monthly buy size $B$.}
+$$n_{1/2} \;=\; L_{s,0}/B \quad (\text{Theorem~\ref{thm:lp-half-life}, Eq.~\eqref{eq:lp-half-life}})$$
+
+\paragraph{Bank-run saturation quantity.}
+$$A^* \;=\; \frac{1}{1-f_s}\left(\sqrt{\frac{\kInv (1-f_s)}{\Floor}} - \Lt\right) \quad (\text{Theorem~\ref{thm:bank-run}, Eq.~\eqref{eq:saturation}})$$
+
+\paragraph{Bank-run premium (state-only constant, $N > A^*$).}
+\begin{align*}
+\Delta^* \;=\; \Pi^*(N) - N\Floor \;&=\; \left[\Ls - \sqrt{\kInv \Floor/(1-f_s)}\right] - A^* \Floor \\
+&=\; \left(\sqrt{\Ls} - \sqrt{\Lt \Floor/(1-f_s)}\right)^2 \\
+&=\; \Ls \cdot \left(1 - \sqrt{\Floor/((1-f_s)\Spot)}\right)^2
+\end{align*}
+$(\text{Theorem~\ref{thm:bank-run}, Eqs.~\eqref{eq:run-premium}, \eqref{eq:run-premium-closed}})$.
+
+\paragraph{\texttt{collectFees} calling equilibrium under atomless competition.}
+$$\Delta t^* \;=\; g/(0.0025 \,\beta) \quad (\text{Theorem~\ref{thm:collect-equilibrium}, Eq.~\eqref{eq:collect-eq}})$$
+
+\paragraph{MEV leakage upper bound on protocol buy-and-burn.}
+$$\mathbb{E}[\mathrm{MEV}] \;\leq\; (1 - p) \cdot \varepsilon_{\text{pub}}(B/N_{\text{TWAP}}, \Ls) \cdot B \;+\; p \cdot \varepsilon_{\text{priv}} \cdot B \quad (\text{Theorem~\ref{thm:mev-bound}, Eq.~\eqref{eq:mev-bound}})$$
+
+\paragraph{Genesis floor-spot constraint.}
+$$\Tres_0 / \Sup_0 \;=\; L_{s,0} / L_{t,0} \quad (\text{forces } \Floor_0 = \Spot_0; \text{ Section~\ref{sec:protocol-genesis}, Eq.~\eqref{eq:genesis-constraint}})$$
+
+% ============================================================
+\section{With-Fees vs.\ Fee-Free Curve-Math Corrections}
+\label{app:with-fees}
+
+This appendix tabulates the $O(f_b) = O(10^{-3})$ corrections to the baseline projection of Section~\ref{sec:numerical-baseline} when the $0.10\%$ buy fee is taken into account on each \texttt{BuyAndBurn} (Case~2 of Theorem~\ref{thm:floor-monotonicity}). Under fee-free curve math each $50/50$-split buy of size $B = R/2$ contributes $B$ to the LP's stable reserve and burns $Y(B) = \Lt - \kInv/(\Ls + B)$ tokens; under with-fees mode the effective input to the curve is $(1 - f_b) B$, the burned amount is $Y_{\mathrm{wf}}(B) = \Lt - \kInv/(\Ls + (1 - f_b) B)$, and the fee residue $f_b B$ accrues to $\Phis$ for realization to the treasury on the next \texttt{collectFees} call. The two modes converge to within the $0.25\%$-per-side caller bounty after collect-realization. A full reproducibility tabulation across the 36-month baseline horizon, alongside the with-fees Track A traces and the Track B fuzz state-diffs from the agreement gate of Section~\ref{sec:numerical-methodology}, will accompany the simulator artifact at the Zenodo DOI cited in the abstract; the appendix at submission time will include the resulting tables.
+
+\end{document}
