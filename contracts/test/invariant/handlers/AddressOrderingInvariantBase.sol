@@ -27,15 +27,19 @@ import {InvariantFixturePaired} from "./InvariantFixturePaired.sol";
 // fixture's `targetContract(handler)` and the assertions are stateless
 // (read-only) post-condition checks.
 //
-// NOTE: This abstract base lives under `handlers/` and uses a plain
-// `.sol` extension (not `.t.sol`) so the Hardhat-v3 EDR invariant
-// test-discovery glob (`test/invariant/*.t.sol`) does NOT pick it up
-// as a concrete test contract. The two concrete subclasses live in
-// the sibling `.t.sol` file and import this base.
+// IMPORTANT — discovery isolation:
+// This abstract base exposes NO `setUp()` and NO `invariant_*` public
+// selectors. Internal helpers only: EDR's invariant-test discovery walks
+// compiled artifacts (not source globs) and would otherwise pick up
+// `invariant_*` selectors on an abstract contract, try to deploy it,
+// and fail with "No contracts to fuzz". Concrete subclasses in
+// `../AddressOrderingInvariant.t.sol` re-expose these helpers as
+// `setUp()` + `invariant_*` wrappers so only the concrete contracts
+// are eligible for fuzzing.
 // =====================================================================
 
 abstract contract AddressOrderingInvariantBase is InvariantFixturePaired {
-    function setUp() public {
+    function _setUpPaired() internal {
         _deployInvariantFixturePaired();
         targetContract(address(handler));
     }
@@ -45,7 +49,7 @@ abstract contract AddressOrderingInvariantBase is InvariantFixturePaired {
     /// @notice Cross-product floor monotonicity, asserted after EVERY
     ///         handler call that produced a state change. Same form as
     ///         {FloorMonotonicityInvariantTest.invariant_FloorNonDecreasing}.
-    function invariant_FloorNonDecreasing_PairedSort() public view {
+    function _check_FloorNonDecreasing_PairedSort() internal view {
         uint8 op = handler.lastOp();
         if (op == 0) return;
         uint256 tBefore = handler.lastTBefore();
@@ -64,7 +68,7 @@ abstract contract AddressOrderingInvariantBase is InvariantFixturePaired {
     /// @notice Cross-product redemption-solvency lower bound. Same form
     ///         as
     ///         {RedemptionSolvencyInvariantTest.invariant_RedemptionSolvencyLowerBound}.
-    function invariant_RedemptionSolvencyLowerBound_PairedSort() public view {
+    function _check_RedemptionSolvencyLowerBound_PairedSort() internal view {
         uint8 op = handler.lastOp();
         if (op == 0) return;
         uint256 S = handler.lastSAfter();
@@ -84,7 +88,7 @@ abstract contract AddressOrderingInvariantBase is InvariantFixturePaired {
     ///         the requested ordering. A regression in the CREATE2 salt
     ///         mine would break the paired-lane matrix; this assertion
     ///         catches such a regression at runtime.
-    function invariant_OrderingMatchesRequested() public view {
+    function _check_OrderingMatchesRequested() internal view {
         require(
             stableIsCurrency0 == _wantStableLowerThanToken(),
             "paired-sort: stable/token ordering drifted from requested predicate"

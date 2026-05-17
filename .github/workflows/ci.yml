@@ -61,6 +61,9 @@ jobs:
     defaults:
       run:
         working-directory: contracts
+    # Skip the paired-ordering CREATE2-mining lane on the PR gate; runs on the v0.1.x-paper-v1 tag job + locally.
+    env:
+      M2_SKIP_HEAVY_INVARIANTS: "1"
     steps:
       - name: Checkout
         uses: actions/checkout@v4

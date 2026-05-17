@@ -45,6 +45,15 @@ interface Vm {
     function snapshot() external returns (uint256);
     function revertTo(uint256 snapshotId) external returns (bool);
     function assume(bool condition) external pure;
+    function envOr(string calldata name, bool defaultValue)
+        external
+        view
+        returns (bool);
+    function envOr(string calldata name, uint256 defaultValue)
+        external
+        view
+        returns (uint256);
+    function skip(bool skipTest) external;
 
     struct Log {
         bytes32[] topics;
