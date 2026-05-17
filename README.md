@@ -7,6 +7,8 @@ A provably floor-preserving tokenomic primitive for revenue-bearing on-chain ass
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20255140.svg)](https://doi.org/10.5281/zenodo.20255140)
 [![SSRN](https://img.shields.io/badge/SSRN-6781499-blueviolet)](https://ssrn.com/abstract=6781499)
 
+> **Latest maintenance release:** `v0.1.2-paper-v1` (2026-05-18) — Zenodo DOI [10.5281/zenodo.20261616](https://doi.org/10.5281/zenodo.20261616). Code-only fix (Hardhat-v3 EDR invariant discovery); paper, figures, simulator, and reference-contract behaviour are unchanged from `v0.1.1-paper-v1`. The concept DOI `10.5281/zenodo.20255140` above resolves to the current version.
+
 ## Overview
 
 M² ("Monotonic Math") is a tokenomic primitive that combines four immutable contracts — a fixed-supply ERC-20 token with redemption, a passive stablecoin treasury, a Uniswap-v4 hook implementing asymmetric per-swap fees, and a 50/50 revenue router — to enforce a contractually monotone non-decreasing redemption floor. Under every protocol-defined operation (buy, sell, redeem, transfer, revenue distribution, fee collection), the per-token claim on the treasury is provably non-decreasing.
