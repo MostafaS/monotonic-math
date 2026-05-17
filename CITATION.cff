@@ -10,7 +10,7 @@ authors:
     email: "0xmostafas@proton.me"
     orcid: "https://orcid.org/0009-0005-2573-3336"
     affiliation: "Independent Researcher"
-version: "0.1.1-paper-v1"
+version: "0.1.2-paper-v1"
 date-released: "2026-05-17"
 license: MIT
 repository-code: "https://github.com/MostafaS/monotonic-math"
