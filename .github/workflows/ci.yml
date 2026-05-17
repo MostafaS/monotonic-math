@@ -2,32 +2,18 @@
 # M² CI — GitHub Actions
 # =============================================================================
 #
-# Two surfaces:
+# Single surface:
 #
-# 1.  `pr` job — runs on every push / pull request to `main`. Mirrors the
-#     `npm run ci` chain from contracts/package.json (compile + check:pragma
-#     + check:hook-salt + lint + audit:bytecode + audit:inheritance +
-#     test:reference + test:agreement + test:local + test:invariant +
-#     test:differential), plus a Python simulator regenerate-figures gate.
-#     Target wallclock: under 5 minutes.
+#   `pr` job — runs on every push / pull request to `main`. Mirrors the
+#   `npm run ci` chain from contracts/package.json (compile + check:pragma
+#   + check:hook-salt + lint + audit:bytecode + audit:inheritance +
+#   test:reference + test:agreement + test:local + test:invariant +
+#   test:differential), plus a Python simulator regenerate-figures gate.
+#   Target wallclock: under 5 minutes.
 #
-# 2.  `v01-paper-v1` job — runs only on the `v0.1.1-paper-v1` tag. Adds the heavy
-#     Track-B nightly suite (`test:invariant:full` at the Phase-4 acceptance
-#     scale: 10k stateless runs, 100k stateful sequences × depth 200) and
-#     the mainnet-fork integration tests (`M2_ENABLE_FORK_TESTS=1
-#     test:fork`). Requires `MAINNET_RPC_URL`.
-#
-# Required GitHub repo secrets:
-#   - MAINNET_RPC_URL      (v0.1.1-paper-v1 job + any @fork test)
-#   - SEPOLIA_RPC_URL      (sepolia deploy / @sepolia test)
-#   - SEPOLIA_PRIVATE_KEY  (sepolia deploy)
-#   - ETHERSCAN_API_KEY    (etherscan verification — Etherscan V2 unified)
-#
-# Secrets resolve into the Hardhat keystore at runtime via the
-# `configVariable("KEY")` pattern in contracts/hardhat.config.ts; the
-# `Configure Hardhat keystore` step writes them through
-# `npx hardhat keystore set` so that the contracts/ scripts find them
-# without a .env file.
+# The heavy paper-v1 lane (`test:invariant:full` at 10k × 100k × 200 plus
+# mainnet-fork tests) is run LOCALLY by the maintainer against a Hardhat
+# keystore — not from GitHub Actions. No GitHub repo secrets are required.
 # =============================================================================
 
 name: M² CI
@@ -35,9 +21,6 @@ name: M² CI
 on:
   push:
     branches: [main]
-    tags:
-      - "v0.1.1-paper-v1"
-      - "v*"
   pull_request:
     branches: [main]
 
@@ -61,7 +44,8 @@ jobs:
     defaults:
       run:
         working-directory: contracts
-    # Skip the paired-ordering CREATE2-mining lane on the PR gate; runs on the v0.1.x-paper-v1 tag job + locally.
+    # Skip the paired-ordering CREATE2-mining lane on the PR gate; the
+    # maintainer runs it locally via `npm run test:invariant`.
     env:
       M2_SKIP_HEAVY_INVARIANTS: "1"
     steps:
@@ -164,8 +148,8 @@ jobs:
 
       # Slither is allowed to fail-soft on the PR job (CI guidance: high /
       # medium findings triaged manually; informational findings do not
-      # gate the merge). The `v0.1.1-paper-v1` job below upgrades this to a
-      # hard gate.
+      # gate the merge). Maintainer runs the hard-gate slither locally
+      # before tagging a release.
       - name: Audit — slither (informational)
         run: npm run audit:slither
         continue-on-error: true
@@ -182,107 +166,3 @@ jobs:
             contracts/deploy/**/manifest*.json
           if-no-files-found: ignore
           retention-days: 14
-
-  # ---------------------------------------------------------------------------
-  # Job 2 — heavy gate on tag `v0.1.1-paper-v1`. Adds:
-  #   - `test:invariant:full` (Phase-4 acceptance: 10k × 100k × 200)
-  #   - `M2_ENABLE_FORK_TESTS=1 test:fork`
-  #   - hard slither (no high / medium findings)
-  # ---------------------------------------------------------------------------
-  v01-paper-v1:
-    name: v0.1.1-paper-v1 (full invariant + fork)
-    if: startsWith(github.ref, 'refs/tags/v0.1.1-paper-v1')
-    needs: pr
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    defaults:
-      run:
-        working-directory: contracts
-    env:
-      MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
-      SEPOLIA_RPC_URL: ${{ secrets.SEPOLIA_RPC_URL }}
-      SEPOLIA_PRIVATE_KEY: ${{ secrets.SEPOLIA_PRIVATE_KEY }}
-      ETHERSCAN_API_KEY: ${{ secrets.ETHERSCAN_API_KEY }}
-      M2_ENABLE_FORK_TESTS: "1"
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node ${{ env.NODE_VERSION }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: contracts/package-lock.json
-
-      - name: Setup Python ${{ env.PYTHON_VERSION }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: pip
-          cache-dependency-path: simulation/requirements.txt
-
-      - name: Install Node deps
-        run: npm ci
-
-      - name: Install Python deps
-        working-directory: ${{ github.workspace }}
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r simulation/requirements.txt
-
-      - name: Track A — regenerate paper figures
-        working-directory: ${{ github.workspace }}
-        run: python simulation/generate_figures.py
-
-      # Hardhat keystore — write the secrets so configVariable() resolves
-      # them at config-load time. `keystore set --force` is idempotent
-      # under the v3 plugin.
-      - name: Configure Hardhat keystore
-        run: |
-          if [ -z "$MAINNET_RPC_URL" ]; then
-            echo "ERROR: MAINNET_RPC_URL is required for the v0.1.1-paper-v1 job."
-            exit 1
-          fi
-          echo "$MAINNET_RPC_URL"      | npx hardhat keystore set MAINNET_RPC_URL      --force
-          echo "$SEPOLIA_RPC_URL"      | npx hardhat keystore set SEPOLIA_RPC_URL      --force
-          echo "$SEPOLIA_PRIVATE_KEY"  | npx hardhat keystore set SEPOLIA_PRIVATE_KEY  --force
-          echo "$ETHERSCAN_API_KEY"    | npx hardhat keystore set ETHERSCAN_API_KEY    --force
-
-      # Re-run compile + base gates (cached); kept as a sanity step.
-      - name: Compile + base gates
-        run: |
-          npm run compile
-          npm run check:pragma
-          npm run check:hook-salt
-
-      # Full Phase-4 invariant suite at acceptance-scale knobs.
-      - name: Test — invariant (full, 10k × 100k × 200)
-        run: npm run test:invariant:full
-        timeout-minutes: 60
-
-      # Mainnet fork (real V4 PoolManager + USDC) — covers:
-      #   * MainnetFork12MonthRouteRevenue.t.sol
-      #   * MainnetForkVestingMassDump.t.sol  (paper §3.7 row 10)
-      #   * Theorem5_2BankRun.t.sol           (on @fork only at this gate)
-      - name: Test — mainnet fork
-        run: npm run test:fork
-        timeout-minutes: 30
-
-      # Slither hard gate (no high / medium findings).
-      - name: Audit — slither (hard gate)
-        run: npm run audit:slither
-
-      - name: Upload v0.1.1-paper-v1 artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: v0.1.1-paper-v1-artifacts-${{ github.run_id }}
-          path: |
-            paper/figures/*.pdf
-            paper/figures/*.png
-            simulation/outputs/*.csv
-            contracts/test/invariant/seeds/**/*
-            contracts/deploy/**/manifest*.json
-          if-no-files-found: ignore
-          retention-days: 365
