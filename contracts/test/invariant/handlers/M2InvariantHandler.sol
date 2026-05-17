@@ -97,6 +97,25 @@ contract M2InvariantHandler {
     ///         5=transfer, 6=collectFees.
     uint8 public lastOp;
 
+    // ---- redemption-solvency ghost (paper §6 invariant (iv)) ----------
+    //
+    // `minFloor` tracks the lower envelope of the floor `F = T * SCALE / S`
+    // observed across every reached state, where `SCALE = 10^(36 - d_s)`.
+    // The redemption-solvency lower bound `T * SCALE >= S * minFloor` MUST
+    // hold at every reachable state. Because Theorem 4.3 already gives
+    // `F` non-decreasing, this lower-envelope check is effectively
+    // `T * SCALE >= S * F_0` — the genesis floor lower bound — but the
+    // monotone-min form is the rigorous statement of invariant (iv) and
+    // makes a regression visible immediately (a single op that breaks
+    // monotonicity by even one wei will be caught by the next assertion).
+    //
+    // Scale factor: this mock environment uses a 6-decimal stable (see
+    // {InvariantFixture.T0_6DEC}); SCALE = 10^(36-6) = 10^30.
+    uint256 public constant FLOOR_SCALE = 1e30;
+    /// @notice Lower envelope of `T * FLOOR_SCALE / S` since genesis.
+    ///         Initialized to `type(uint256).max` and refined on each op.
+    uint256 public minFloor;
+
     /// @notice Per-op call counters (handler coverage report).
     uint256 public callsRouteRevenue;
     uint256 public callsRedeem;
@@ -130,6 +149,32 @@ contract M2InvariantHandler {
         }
         INITIAL_SUPPLY = initialSupply_;
         totalMintedEver = initialSupply_;
+        // Seed minFloor with the highest possible value so the first
+        // observation refines it downward. The fixture invokes
+        // `seedMinFloor` immediately after deploy + LP seeding so the
+        // running minimum starts at the genesis floor (F_0).
+        minFloor = type(uint256).max;
+    }
+
+    /// @notice One-shot setter invoked by the fixture once the protocol
+    ///         is fully wired. Sets `minFloor` to the genesis floor
+    ///         `T_0 * FLOOR_SCALE / S_0`. May only be called when the
+    ///         ghost is still at the sentinel `type(uint256).max`.
+    function seedMinFloor() external {
+        require(minFloor == type(uint256).max, "minFloor already seeded");
+        uint256 S = TOKEN.totalSupply();
+        uint256 T = STABLE.balanceOf(address(TREASURY));
+        if (S == 0) return;
+        minFloor = (T * FLOOR_SCALE) / S;
+    }
+
+    /// @dev Refine the lower envelope after every post-op snapshot. The
+    ///      computation matches `M2Token.floorPrice()` modulo the
+    ///      hardcoded SCALE for this fixture's 6-decimal stable.
+    function _refineMinFloor() internal {
+        if (lastSAfter == 0) return;
+        uint256 f = (lastTAfter * FLOOR_SCALE) / lastSAfter;
+        if (f < minFloor) minFloor = f;
     }
 
     // =================================================================
@@ -160,6 +205,7 @@ contract M2InvariantHandler {
                 treasuryWithdrawnExceptRedemption += (lastTBefore - lastTAfter);
             }
         }
+        _refineMinFloor();
     }
 
     // =================================================================

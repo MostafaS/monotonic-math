@@ -1,6 +1,7 @@
 cff-version: 1.2.0
 message: "If you use this software or its accompanying paper, please cite both the paper (via the preferred-citation block) and this repository."
 title: "Monotonic Math (M²): a provably floor-preserving tokenomic primitive for revenue-bearing on-chain assets"
+doi: "10.5281/zenodo.20255140"
 abstract: "M² is a tokenomic primitive that combines four immutable contracts — a fixed-supply ERC-20 token with redemption, a passive stablecoin treasury, a Uniswap-v4 hook implementing asymmetric per-swap fees, and a 50/50 revenue router — to enforce a contractually monotone non-decreasing redemption floor under every protocol-defined operation. This repository accompanies the paper and contains the LaTeX sources, the deterministic figure simulator, and a placeholder for the Solidity reference implementation."
 type: software
 authors:
@@ -9,8 +10,8 @@ authors:
     email: "0xmostafas@proton.me"
     orcid: "https://orcid.org/0009-0005-2573-3336"
     affiliation: "Independent Researcher"
-version: "0.1.0-paper-v1"
-date-released: "2026-05-16"
+version: "0.1.1-paper-v1"
+date-released: "2026-05-17"
 license: MIT
 repository-code: "https://github.com/MostafaS/monotonic-math"
 keywords:
@@ -34,5 +35,5 @@ preferred-citation:
       orcid: "https://orcid.org/0009-0005-2573-3336"
       affiliation: "Independent Researcher"
   year: 2026
+  doi: "10.5281/zenodo.20255141"
   month: 5
-  notes: "Working paper. Target venue: Financial Cryptography and Data Security 2027 (LNCS). Preprint planned on arXiv (cs.CR primary, q-fin.GN cross-list) and SSRN. Zenodo DOI: TBD upon release."

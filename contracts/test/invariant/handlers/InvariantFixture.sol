@@ -26,6 +26,19 @@ import {M2InvariantHandler} from "./M2InvariantHandler.sol";
 ///         addresses via the test contract's nonce so the four mutually-
 ///         immutable contracts (treasury, token, router, hook) can be
 ///         linked in a single deployment pass.
+/// @dev    Address-sort orientation: by default the fixture takes whatever
+///         ordering CREATE produces for `(stable, token)` and records it
+///         via `stableIs0` on the synthesized PoolKey. Subclasses that
+///         need a specific ordering for paired-lane coverage override
+///         `_wantOrderingConstraint()` and `_wantStableLowerThanToken()`;
+///         the fixture then either accepts the natural ordering or aborts
+///         with a clear message so the runner re-rolls. This mirrors the
+///         paired-lane pattern in {V4FullRangeIntegration} and exercises
+///         Theorem 4.3 floor monotonicity AND invariant (iv) redemption
+///         solvency under BOTH `address(stable) < address(token)` and
+///         `address(stable) > address(token)`. See the paired subclasses
+///         in {AddressOrderingInvariant_StableLowTest},
+///         {AddressOrderingInvariant_StableHighTest}.
 abstract contract InvariantFixture is TestBase {
     // -----------------------------------------------------------------
     // Canonical genesis parameters (mock environment uses 6-decimal stable)
@@ -57,6 +70,11 @@ abstract contract InvariantFixture is TestBase {
     M2Token internal tokenContract;
     M2RevenueRouter internal routerContract;
     M2InvariantHandler internal handler;
+
+    /// @notice True iff `address(stable) < address(token)` post-deploy.
+    ///         Recorded by `_deployInvariantFixture` for the paired
+    ///         address-sort lane (see {InvariantFixturePaired}).
+    bool internal stableIsCurrency0;
 
     // -----------------------------------------------------------------
     // Nonce-prediction helpers
@@ -102,6 +120,14 @@ abstract contract InvariantFixture is TestBase {
         // 1. MockStable (no deps).
         stableTok = new MockStable();
         require(address(stableTok) == stableAddr, "fixture: stable addr");
+
+        // Record address-sort orientation for the paired-lane invariants
+        // (see {InvariantFixturePaired}). The default fixture takes the
+        // natural CREATE-derived ordering and exposes it via
+        // `stableIsCurrency0`; the paired fixture overrides
+        // `_deployInvariantFixture` to CREATE2-mine the stable salt
+        // against the desired predicate.
+        stableIsCurrency0 = uint160(stableAddr) < uint160(tokenAddr);
 
         // 2. MockAMM (depends on token, hook by address only).
         amm = new MockAMM(stableAddr, tokenAddr, hookAddr);
@@ -188,6 +214,13 @@ abstract contract InvariantFixture is TestBase {
         stableTok.approve(ammAddr, type(uint256).max);
         vm.prank(handlerAddr);
         IERC20(tokenAddr).approve(ammAddr, type(uint256).max);
+
+        // Seed the redemption-solvency ghost `minFloor` to the genesis
+        // floor `F_0 = T_0 * FLOOR_SCALE / S_0`. Subsequent ops refine
+        // this lower envelope inside `_refineMinFloor`. The seed is
+        // load-bearing for invariant (iv) `T * SCALE >= S * minFloor`
+        // (see {RedemptionSolvencyInvariantTest}).
+        handler.seedMinFloor();
     }
 
     // -----------------------------------------------------------------

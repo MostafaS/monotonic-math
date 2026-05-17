@@ -132,6 +132,7 @@ verify: reproduce
 	@# Track-A simulator output under simulation/outputs/. Paths in the
 	@# manifest are relative to the project root so reviewers can re-verify
 	@# with a single `shasum -a 256 -c MANIFEST.sha256` from the same dir.
+	@mkdir -p $(SIMULATION)/outputs paper/figures
 	@HASHER=$$( command -v shasum >/dev/null 2>&1 && echo "shasum -a 256" || echo "sha256sum" ); \
 	  : > MANIFEST.sha256.tmp; \
 	  (cd paper/figures && $$HASHER *.pdf *.png 2>/dev/null | sed 's|^\([0-9a-f]*  \)|\1paper/figures/|') >> MANIFEST.sha256.tmp; \

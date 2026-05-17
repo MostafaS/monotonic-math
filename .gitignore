@@ -3,10 +3,13 @@ M2-Monotonic-Math-Explained.html
 M2-StepByStep-Walkthrough.html
 paper-plan.md
 m2-monotonic-math-protocol.md
-design-doc/
 
-# Claude Code IDE config
-.claude/
+
+# Local review / scratch outputs — not for public repo
+.review/
+
+# Transient deploy artifacts (regenerated on each dry-run; not a release artifact)
+contracts/deploy/sepolia/dry_run_manifest.json
 
 # LaTeX build artifacts
 *.aux
