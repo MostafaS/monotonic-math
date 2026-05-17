@@ -11,14 +11,14 @@
 #     test:differential), plus a Python simulator regenerate-figures gate.
 #     Target wallclock: under 5 minutes.
 #
-# 2.  `paper-v1` job — runs only on the `paper-v1` tag. Adds the heavy
+# 2.  `v01-paper-v1` job — runs only on the `v0.1.1-paper-v1` tag. Adds the heavy
 #     Track-B nightly suite (`test:invariant:full` at the Phase-4 acceptance
 #     scale: 10k stateless runs, 100k stateful sequences × depth 200) and
 #     the mainnet-fork integration tests (`M2_ENABLE_FORK_TESTS=1
 #     test:fork`). Requires `MAINNET_RPC_URL`.
 #
 # Required GitHub repo secrets:
-#   - MAINNET_RPC_URL      (paper-v1 job + any @fork test)
+#   - MAINNET_RPC_URL      (v0.1.1-paper-v1 job + any @fork test)
 #   - SEPOLIA_RPC_URL      (sepolia deploy / @sepolia test)
 #   - SEPOLIA_PRIVATE_KEY  (sepolia deploy)
 #   - ETHERSCAN_API_KEY    (etherscan verification — Etherscan V2 unified)
@@ -36,7 +36,7 @@ on:
   push:
     branches: [main]
     tags:
-      - "paper-v1"
+      - "v0.1.1-paper-v1"
       - "v*"
   pull_request:
     branches: [main]
@@ -161,8 +161,8 @@ jobs:
 
       # Slither is allowed to fail-soft on the PR job (CI guidance: high /
       # medium findings triaged manually; informational findings do not
-      # gate the merge). The `paper-v1` job below upgrades this to a hard
-      # gate.
+      # gate the merge). The `v0.1.1-paper-v1` job below upgrades this to a
+      # hard gate.
       - name: Audit — slither (informational)
         run: npm run audit:slither
         continue-on-error: true
@@ -181,14 +181,14 @@ jobs:
           retention-days: 14
 
   # ---------------------------------------------------------------------------
-  # Job 2 — heavy gate on tag `paper-v1`. Adds:
+  # Job 2 — heavy gate on tag `v0.1.1-paper-v1`. Adds:
   #   - `test:invariant:full` (Phase-4 acceptance: 10k × 100k × 200)
   #   - `M2_ENABLE_FORK_TESTS=1 test:fork`
   #   - hard slither (no high / medium findings)
   # ---------------------------------------------------------------------------
-  paper-v1:
-    name: paper-v1 (full invariant + fork)
-    if: startsWith(github.ref, 'refs/tags/paper-v1')
+  v01-paper-v1:
+    name: v0.1.1-paper-v1 (full invariant + fork)
+    if: startsWith(github.ref, 'refs/tags/v0.1.1-paper-v1')
     needs: pr
     runs-on: ubuntu-latest
     timeout-minutes: 90
@@ -238,7 +238,7 @@ jobs:
       - name: Configure Hardhat keystore
         run: |
           if [ -z "$MAINNET_RPC_URL" ]; then
-            echo "ERROR: MAINNET_RPC_URL is required for the paper-v1 job."
+            echo "ERROR: MAINNET_RPC_URL is required for the v0.1.1-paper-v1 job."
             exit 1
           fi
           echo "$MAINNET_RPC_URL"      | npx hardhat keystore set MAINNET_RPC_URL      --force
@@ -270,11 +270,11 @@ jobs:
       - name: Audit — slither (hard gate)
         run: npm run audit:slither
 
-      - name: Upload paper-v1 artifacts
+      - name: Upload v0.1.1-paper-v1 artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: paper-v1-artifacts-${{ github.run_id }}
+          name: v0.1.1-paper-v1-artifacts-${{ github.run_id }}
           path: |
             paper/figures/*.pdf
             paper/figures/*.png

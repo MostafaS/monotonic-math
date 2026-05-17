@@ -4,7 +4,7 @@ This document is the single source of truth for reproducing every
 numerical claim in the M² paper (`paper/main.pdf`) and every passing
 test in the Solidity reference implementation (`contracts/`).
 
-The paper-v1 artifact is pinned at Zenodo DOI
+The v0.1.1-paper-v1 artifact is pinned at Zenodo DOI
 [`10.5281/zenodo.20255141`](https://doi.org/10.5281/zenodo.20255141)
 (v0.1.1-paper-v1, 2026-05-17).
 
@@ -29,19 +29,35 @@ keystore — see `contracts/KEYSTORE.md`.
 ```bash
 git clone https://github.com/<your-org>/M2.git
 cd M2
-
-# Track A — Python simulator
-cd simulation
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-cd ..
-
-# Track B — Solidity reference implementation
-cd contracts
-npm ci
-cd ..
+make install
 ```
+
+`make install` is the canonical one-shot bootstrap for both tracks:
+
+- Track A — creates an isolated virtualenv at `simulation/.venv/` (this
+  is required on Homebrew Python, Debian 12+, Ubuntu 24.04+ and any
+  other interpreter that enforces PEP 668's `externally-managed-environment`
+  marker), upgrades `pip`, and installs `simulation/requirements.txt`
+  (numpy, matplotlib — pinned ranges).
+- Track B — runs `npm ci` in `contracts/` against the committed
+  `package-lock.json` for a reproducible Node dependency tree (Hardhat
+  v3 + V4 + OpenZeppelin).
+
+Re-running `make install` is idempotent: the venv is reused if already
+present, `pip install` is a no-op for already-satisfied requirements,
+and `npm ci` deterministically reproduces `node_modules/` from the
+lockfile.
+
+If you prefer to drive Python by hand (e.g. for an IDE that wants the
+interpreter path), the venv is at `simulation/.venv/bin/python`; you can
+also `source simulation/.venv/bin/activate` to use it as the shell's
+default `python`. Subsequent `make figures` / `make reproduce` /
+`make verify` invocations auto-detect the venv and use it without any
+activation step.
+
+Granular install targets are also available — `make install-py` (Track A
+only) and `make install-node` (Track B only). See `make help` for the
+full list.
 
 ## One-command verify (under 5 minutes)
 
@@ -55,7 +71,12 @@ This runs `make reproduce` (Track A figure regeneration + contracts
 compile) followed by `cd contracts && npm run ci` (compile +
 `check:pragma` + `check:hook-salt` + lint + audit:bytecode +
 audit:inheritance + test:reference + test:agreement + test:local +
-test:invariant). Expected wallclock on a 2026 laptop: 3–5 minutes.
+test:invariant). On completion it writes a SHA-256 manifest covering
+every regenerated paper figure (`paper/figures/*.pdf`, `paper/figures/*.png`)
+and every Track-A CSV (`simulation/outputs/*`) to `MANIFEST.sha256`
+at the project root. Re-verify any artifact tree with
+`shasum -a 256 -c MANIFEST.sha256` from the project root. Expected
+wallclock on a 2026 laptop: 3–5 minutes.
 
 ## Full pre-tag verify
 
@@ -136,8 +157,8 @@ The full mapping of paper claims to test files is in
 ### CI
 
 The same gates run on GitHub Actions on every push and pull request to
-`main` via `.github/workflows/ci.yml`. The `paper-v1` tag triggers the
-heavy gate (full invariant + mainnet-fork) automatically.
+`main` via `.github/workflows/ci.yml`. The `v0.1.1-paper-v1` tag triggers
+the heavy gate (full invariant + mainnet-fork) automatically.
 
 Required CI secrets (set via the GitHub UI under Settings → Secrets and
 variables → Actions):
@@ -190,7 +211,7 @@ month-12 state — can be reproduced in three independent ways:
 All three paths must agree within the documented V4 tick-rounding
 tolerance (≤ 0.5%; empirical band ≤ 0.1 bps).
 
-## Open items for the `paper-v1` tag
+## Open items for the `v0.1.1-paper-v1` tag
 
 The following items require user action and are not automatable by an
 agent:
@@ -208,10 +229,10 @@ agent:
 - Execute the Sepolia live deployment per `contracts/KEYSTORE.md`
   ("Phase 7: Sepolia live deployment") and commit
   `contracts/deploy/sepolia/manifest.json`.
-- Tag `paper-v1` (`git tag -s paper-v1 && git push --tags`) to trigger
-  the heavy GitHub Actions gate.
+- Tag `v0.1.1-paper-v1` (`git tag -s v0.1.1-paper-v1 && git push --tags`)
+  to trigger the heavy GitHub Actions gate.
 
-## Reproducibility manifest (for paper-v1 archival)
+## Reproducibility manifest (for v0.1.1-paper-v1 archival)
 
 After `make verify-full` completes, the run produces:
 
