@@ -1,0 +1,10 @@
+{
+  "detectors_to_exclude": "naming-convention,pragma,solc-version,similar-names,external-function",
+  "exclude_informational": false,
+  "exclude_low": false,
+  "exclude_medium": false,
+  "exclude_high": false,
+  "filter_paths": "node_modules|contracts/mocks|test|scripts",
+  "disable_color": false,
+  "fail_on": "medium"
+}

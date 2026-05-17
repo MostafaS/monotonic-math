@@ -1,0 +1,16 @@
+{
+  "extends": "solhint:recommended",
+  "rules": {
+    "no-inline-assembly": "error",
+    "avoid-tx-origin": "error",
+    "avoid-suicide": "error",
+    "avoid-throw": "error",
+    "no-complex-fallback": "error",
+    "compiler-version": ["error", "0.8.34"],
+    "func-visibility": ["warn", { "ignoreConstructors": true }],
+    "not-rely-on-time": "off",
+    "no-console": "warn",
+    "max-line-length": ["warn", 120],
+    "reason-string": ["warn", { "maxLength": 64 }]
+  }
+}

@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+
+# Hardhat build artifacts
+cache/
+artifacts/
+typechain-types/
+
+# TypeScript compile output
+dist/
+*.tsbuildinfo
+
+# Coverage
+coverage/
+coverage.json
+.nyc_output/
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*~
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local secrets — should never appear, but defense in depth
+# (Hardhat keystore is the canonical secret store)
+.env
+.env.*
+!.env.example
+
+# Local hardhat state
+.hardhat/

@@ -1,0 +1,20 @@
+{
+  "salt": "0x0000000000000000000000000000000000000000000000000000000000004cb0",
+  "hookAddress": "0x114b5D659c2C0B3Ed4404f36c8262184ED00c080",
+  "bytecodeHash": "0x30718fa80c347ea61c45f142f1db5af2e8dbf7d41fa293a8b3ff4b8696bfdfc2",
+  "factoryAddress": "0xdeaDDeADDEaDdeaDdEAddEADDEAdDeadDEADDEaD",
+  "constructorArgs": {
+    "poolManager": "0xE03A1074c86CFeDd5C142C4F04F1a1536e203543",
+    "token": "0x0000000000000000000000000000000000001111",
+    "stable": "0x0000000000000000000000000000000000002222",
+    "treasury": "0x0000000000000000000000000000000000003333"
+  },
+  "hookFlag": "0x0080",
+  "metadata": {
+    "solcVersion": "0.8.34",
+    "contractName": "M2V4Hook",
+    "sourceName": "contracts/hook/M2V4Hook.sol",
+    "minedAt": "2026-05-17T14:04:57.013Z",
+    "iterations": 19633
+  }
+}

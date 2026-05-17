@@ -1,0 +1,30 @@
+{
+  "_comment": "TEMPLATE — this file is overwritten by `npm run deploy:sepolia` after the user configures the Hardhat keystore (SEPOLIA_RPC_URL, SEPOLIA_PRIVATE_KEY) and runs the live Sepolia deployment. Until then this file documents the schema and the canonical Sepolia infrastructure addresses. See `docs/deployment_runbook.md` and `KEYSTORE.md` for the full procedure.",
+  "mode": "live",
+  "chainId": 11155111,
+  "deployedAt": "<populated by deploy:sepolia>",
+  "deployer": "<populated by deploy:sepolia — Sepolia EOA from SEPOLIA_PRIVATE_KEY>",
+  "stable": "<populated by deploy:sepolia — either 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238 (Circle USDC Sepolia) or freshly-deployed MockStable address>",
+  "stableSource": "<populated by deploy:sepolia — circle-usdc-sepolia | mock-stable-fallback>",
+  "factory": "<populated by deploy:sepolia — M2GenesisFactory>",
+  "factoryDeployTxHash": "<populated by deploy:sepolia>",
+  "executeTxHash": "<populated by deploy:sepolia — factory.execute() tx>",
+  "token": "<populated by deploy:sepolia — M2Token>",
+  "treasury": "<populated by deploy:sepolia — M2Treasury>",
+  "router": "<populated by deploy:sepolia — M2RevenueRouter>",
+  "hook": "<populated by deploy:sepolia — M2V4Hook (CREATE2 + BEFORE_SWAP_FLAG)>",
+  "vestingWallets": [
+    "<populated by deploy:sepolia — N OZ VestingWallet addresses, one per recipient>"
+  ],
+  "poolManager": "0xE03A1074c86CFeDd5C142C4F04F1a1536e203543",
+  "hookSalt": "<populated by deploy:sepolia — mined for this deployer/factory>",
+  "hookBytecodeHash": "<populated by deploy:sepolia — keccak256(creationCode || ctorArgs)>",
+  "e2e": {
+    "_comment": "Populated by `npm run e2e:sepolia` after the live deployment. The dry-run analog lives in deploy/sepolia/dry_run_manifest.json.",
+    "routeRevenueTxHash": "<populated by e2e:sepolia>",
+    "lpSellTxHash": "<populated by e2e:sepolia>",
+    "lpBuyTxHash": "<populated by e2e:sepolia>",
+    "collectFeesTxHash": "<populated by e2e:sepolia>",
+    "redeemTxHash": "<populated by e2e:sepolia>"
+  }
+}

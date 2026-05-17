@@ -35,15 +35,24 @@ All figures saved as PDF (for the paper) and PNG (for preview) in
 from __future__ import annotations
 
 import os
+import csv
+from decimal import Decimal, getcontext
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 from pathlib import Path
 
-# ---- Output directory ------------------------------------------------------
+# ---- Output directories ----------------------------------------------------
 HERE = Path(__file__).resolve().parent
 FIG_DIR = (HERE.parent / "paper" / "figures").resolve()
 FIG_DIR.mkdir(parents=True, exist_ok=True)
+
+# CSV outputs consumed by the contracts repo's agreement gate
+# (contracts/scripts/agreement_gate.{ts,py}). Track A is the single source of
+# truth; the contracts repo never duplicates the simulator (see FINAL_REPORT
+# blocker B2).
+OUT_DIR = (HERE / "outputs").resolve()
+OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # ---- Academic clean style --------------------------------------------------
 plt.rcParams.update({
@@ -530,6 +539,120 @@ def fig_montecarlo_bands():
     plt.close(fig)
 
 
+# ---- CSV emitters (Phase 1 agreement-gate inputs) --------------------------
+#
+# These CSVs are consumed by the contracts repo's TS reference model and
+# Python sibling at:
+#   contracts/scripts/agreement_gate.ts
+#   contracts/scripts/agreement_gate.py
+# and by the reference-model unit tests in
+#   contracts/test/reference/M2ReferenceModel.test.ts
+#
+# All trajectories are computed under "fee-free curve math" — the paper §6
+# Table 1 convention — so the TS reference model must run in its fee-free
+# mode for row-by-row comparison. The with-fees mode (the implementation
+# convention) is exercised separately by Phase 6 differential tests.
+
+def _write_path_csv(out_path: Path, path: dict, n_months: int) -> None:
+    """Write a (T, S, F, Lt, Ls, P) trajectory as one row per month."""
+    spot = path["Ls"] / path["Lt"]
+    with out_path.open("w", newline="") as fh:
+        w = csv.writer(fh)
+        w.writerow(["month", "treasury", "supply", "floor",
+                    "lp_tokens", "lp_stable", "spot"])
+        for m in range(n_months + 1):
+            w.writerow([
+                m,
+                f"{path['T'][m]:.18g}",
+                f"{path['S'][m]:.18g}",
+                f"{path['F'][m]:.18g}",
+                f"{path['Lt'][m]:.18g}",
+                f"{path['Ls'][m]:.18g}",
+                f"{spot[m]:.18g}",
+            ])
+
+
+def _decimal_sqrt(x: Decimal) -> Decimal:
+    """Newton's-method sqrt at the current decimal precision."""
+    if x < 0:
+        raise ValueError("sqrt of negative")
+    if x == 0:
+        return Decimal(0)
+    # Initial guess via float, then iterate.
+    guess = Decimal(float(x).__pow__(0.5))
+    # Iterate to convergence at the active precision.
+    for _ in range(80):
+        nxt = (guess + x / guess) / 2
+        if nxt == guess:
+            break
+        guess = nxt
+    return guess
+
+
+def _emit_canonical_month12_csv(out_path: Path) -> None:
+    """
+    Compute the Theorem 5.2 anchor (A*, Δ*) at the canonical month-12 state
+    using Decimal(prec=60). This is the load-bearing headline number; the TS
+    reference model's bigint sqrt is compared against this Decimal-precision
+    truth in the unit tests with a documented tolerance.
+
+    Canonical month-12 state (paper §6 Table 1, fee-free curve math):
+      T  = 1,600,000
+      S  = 2e9 / 3
+      F  = T / S = 0.0024  (exact in rationals; 0.0024 ≈ 2.4e-3)
+      Lt = 1.25e9 / 3
+      Ls = 1,350,000
+      k  = Lt * Ls
+      A* = (1/(1-f_s)) * (sqrt(k*(1-f_s)/F) - Lt)
+      Δ* = Ls - sqrt(k*F/(1-f_s)) - A* * F
+    """
+    getcontext().prec = 60
+    fs = Decimal("0.03")
+    T = Decimal(1_600_000)
+    S = Decimal(2_000_000_000) / Decimal(3)
+    F = T / S  # = 6e6/(2.5e9) = 0.0024 exactly via fraction simplification
+    Lt = Decimal(1_250_000_000) / Decimal(3)
+    Ls = Decimal(1_350_000)
+    k = Lt * Ls
+    one_m_fs = Decimal(1) - fs
+
+    sqrt_a = _decimal_sqrt(k * one_m_fs / F)
+    A_star = (sqrt_a - Lt) / one_m_fs
+
+    sqrt_b = _decimal_sqrt(k * F / one_m_fs)
+    delta_star = Ls - sqrt_b - A_star * F
+
+    with out_path.open("w", newline="") as fh:
+        w = csv.writer(fh)
+        w.writerow(["T", "S", "F", "Lt", "Ls", "k", "A_star", "delta_star"])
+        # Print with full Decimal precision so the TS test can read them back.
+        w.writerow([
+            f"{T:f}",
+            f"{S:.40f}",
+            f"{F:.40f}",
+            f"{Lt:.40f}",
+            f"{Ls:f}",
+            f"{k:.40f}",
+            f"{A_star:.40f}",
+            f"{delta_star:.40f}",
+        ])
+
+
+def emit_csvs() -> None:
+    """Emit Phase 1 agreement-gate CSVs to simulation/outputs/."""
+    R = 100_000.0  # paper §6 baseline scenario S1
+    path12 = deterministic_path(R, 12)
+    path36 = deterministic_path(R, 36)
+    _write_path_csv(OUT_DIR / "baseline_12mo.csv", path12, 12)
+    _write_path_csv(OUT_DIR / "baseline_36mo.csv", path36, 36)
+    _emit_canonical_month12_csv(OUT_DIR / "canonical_month12_state.csv")
+    print(f"Writing CSVs to {OUT_DIR}")
+    print("  baseline_12mo.csv")
+    print("  baseline_36mo.csv")
+    print("  canonical_month12_state.csv "
+          f"(Δ* via Decimal(prec=60), headline = $21,476.5621...)")
+
+
 if __name__ == "__main__":
     print(f"Writing figures to {FIG_DIR}")
     path12 = fig_floor_trajectory()
@@ -547,4 +670,5 @@ if __name__ == "__main__":
     print("  fig-organic-volume")
     fig_montecarlo_bands()
     print("  fig-montecarlo-bands")
+    emit_csvs()
     print("Done.")
