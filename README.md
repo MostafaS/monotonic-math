@@ -124,7 +124,3 @@ The following disclosures mirror the *Disclosures* section of the paper.
 **Conflict of interest.** The author intends to deploy a reference implementation of the M² protocol described in this paper. The mechanism is intended for open-source release as a non-proprietary tokenomics primitive available to any DeFi project; the author claims no proprietary rights over the design and does not hold a financial interest in any specific instance of the protocol beyond the reference deployment. Readers should weigh this intended deployment when interpreting the qualitative framing of the paper, though all quantitative claims are derivable from the protocol specification and the closed-form analysis of paper §§4–5 and do not depend on any operational assumption about a specific deployment.
 
 **Code and data availability.** The simulator code and figure-generation scripts are in this repository under the MIT License. The reference contract implementation will be developed in [`contracts/`](contracts/) and released under the same license. The v0.2.0-paper-v2 artifact is deposited on Zenodo: version DOI [10.5281/zenodo.20255141](https://doi.org/10.5281/zenodo.20255141); the concept DOI [10.5281/zenodo.20255140](https://doi.org/10.5281/zenodo.20255140) tracks subsequent versions and resolves to the latest.
-
-## Contact
-
-Mostafa Sadjadi — [0xmostafas@proton.me](mailto:0xmostafas@proton.me) — Independent Researcher
