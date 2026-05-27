@@ -1,31 +1,19 @@
 % ============================================================
-\section{Numerical Results and Sensitivity Analysis}
+\section{Numerical Results and Cross-Protocol Comparison}
 \label{sec:numerical-results}
 
-Section~\ref{sec:formal-invariants} established the floor-monotonicity property as a structural theorem and Section~\ref{sec:economic-analysis} derived closed-form characterizations of the adversarial decision problem, the LP half-life, and the calling and MEV-bound equilibria. This section reports the numerical operating envelope of the protocol over a 36-month horizon, sweeps the four free design parameters, and confronts the analytics with a Hardhat v3 invariant-test suite that asserts the floor property on the actual compiled bytecode of the token, treasury, and revenue router (with a \texttt{MockStable} ERC-20 standing in for the backing stablecoin counterparty in the fast invariant lane and the deployed mainnet stable on the fork lane); V4-mediated cases (LPBuy, LPSell, CollectFees) are exercised against the deployed mainnet PoolManager on the \texttt{v0.1.1-paper-v1} fork lane and against semantics-equivalent mocks in the fast invariant lane. The reproducibility artifact (Section~\ref{sec:numerical-reproducibility}) regenerates every figure and table in this section from a single command, and pins the version cited in the abstract.
+This section reports the 36-month operating envelope, verifies cross-track agreement against the Hardhat v3 fuzz suite, and positions M\textsuperscript{2} against prior comparators.
 
-\subsection{Methodology: a two-track simulation stack}
-\label{sec:numerical-methodology}
+\paragraph{Methodology.} Two-track simulator, agreement enforced as a paper-stopping invariant. Track A: vectorized NumPy with the closed-form recurrence and lognormal-revenue Monte Carlo; canonical month-12 state in 60-digit \texttt{Decimal}. Track B: Hardhat v3 invariant-test suite (\texttt{.t.sol} with \texttt{forge-std} assertions, executed by Hardhat v3's native EDR; no \texttt{foundry.toml}), exercising \texttt{routeRevenue}, \texttt{swap}, \texttt{redeem}, \texttt{collectFees} and asserting (i) $\Floor_{\text{new}} \geq \Floor_{\text{old}}$, (ii) $\Tres \geq 0$, (iii) $\Sup \leq \Sup_0$, (iv) $\Tres \geq \Sup \cdot \min_t \Floor(t)$ after each transition. Fast gate: $1{,}000$ stateless and $1{,}000$ stateful (depth $50$) per PR; full gate at \texttt{v0.2.0-paper-v2}: $10{,}000$ stateless and $100{,}000$ stateful (depth $200$). Agreement: \texttt{ABS\_TOL = 1e-3} (fee-free stable units), \texttt{REL\_TOL = 1e-9} on $(\Tres, \Sup, \Lt, \Ls)$. Additional sweeps and Monte Carlo bands are in the Zenodo artifact.
 
-We adopt a two-track simulation strategy whose central design discipline is that the two tracks must produce numerically agreeing results on every shared scenario, with divergence treated as a paper-stopping bug.
+\paragraph{Remark (convention).} Baseline scenarios use \emph{fee-free curve math}: each split contributes its full $B = R/2$, ignoring the $0.10\%$ buy fee at swap. The with-fees correction is $O(f_b) = O(10^{-3})$ per entry; Track A runs with-fees against Track B in the agreement gate; correction tables are in the artifact.
 
-\paragraph{Track A: Python analytics.} A vectorized NumPy simulator computes the deterministic closed-form recurrence and the lognormal-stochastic-revenue Monte Carlo bands; a single canonical-month-12 state is also computed in 60-digit \texttt{Decimal} arithmetic to anchor Theorem~\ref{thm:bank-run}'s numerical example. An on-chain-mirroring integer reference implementation (with the truncation residual of Lemma~\ref{lem:integer-redemption}) lives on the Track-B side and is exercised by the invariant suite; the Track-A simulator does not duplicate the integer semantics. Each Monte Carlo scenario runs $10^4$ sample paths per (scenario $\times$ sweep-cell) combination. Track A is the source of every figure and table in this section.
-
-\paragraph{Track B: Hardhat v3 invariant tests.} A handler contract issues bounded random calls to the deployed protocol's \texttt{routeRevenue}, \texttt{swap}, \texttt{redeem}, and \texttt{collectFees} entry points. The suite is written as Solidity \texttt{.t.sol} files using \texttt{forge-std}-style assertions but is executed by Hardhat v3's native EDR (Ethereum Development Runtime) rather than by Foundry's \texttt{forge}; the project is configured through \texttt{hardhat.config.ts} alone, with no \texttt{foundry.toml}. After every state transition, four invariant assertions are checked: (i) $\Floor_{\text{new}} \geq \Floor_{\text{old}}$ (Theorem~\ref{thm:floor-monotonicity}); (ii) $\Tres \geq 0$ (treasury solvency); (iii) $\Sup \leq \Sup_0$ (no post-genesis minting); (iv) $\Tres \geq \Sup \cdot \min_t \Floor(t)$ (redemption-solvency lower bound). The runner is configured with $1{,}000$ stateless and $1{,}000$ stateful (depth $50$) random sequences on the fast gate; $10{,}000$ stateless and $100{,}000$ stateful (depth $200$) sequences on the \texttt{v0.1.1-paper-v1} tag gate, configured via the \texttt{M2\_FUZZ\_RUNS} / \texttt{M2\_INVARIANT\_RUNS} / \texttt{M2\_INVARIANT\_DEPTH} env knobs. GitHub Actions CI regresses the fast gate on every push to \texttt{main} and every PR, and the full gate on the \texttt{v0.1.1-paper-v1} tag. A divergence between Tracks A and B on any agreed scenario halts the paper revision.
-
-\paragraph{Agreement gate.} A reconciliation script compares Track A's CSV outputs against a TypeScript reference model of the protocol's deterministic recurrence (\texttt{contracts/scripts/agreement\_gate.ts}), and verifies tolerance-band agreement (\texttt{ABS\_TOL} $= 10^{-3}$ in fee-free stable units, \texttt{REL\_TOL} $= 10^{-9}$) on $(\Tres, \Sup, \Lt, \Ls)$ trajectories across a shared deterministic baseline scenario. The cross-check is designed to catch specification drift between the paper, the Python recurrence, and the Solidity reference (e.g., rounding direction on the integer-arithmetic redemption residual; ordering of router buy-and-burn versus treasury deposit) and is the single most important quality discipline in the simulation pipeline.
-
-\paragraph{Fee-free curve math vs.\ with-fees mode.} For legibility, the deterministic baseline scenarios and figures reported in this paper are presented under \emph{fee-free curve math}: each $50/50$ revenue split contributes its full $B = R/2$ to the LP's stable reserve, with the $0.10\%$ buy fee ignored. We use this convention to keep the closed-form recurrence (and the table values) interpretable by hand. The with-fees mode---in which the $0.10\%$ buy fee is deducted on input, folded into $\Phis$, and realized at the next \texttt{collectFees}---is the implementation Track A will run against Track B in the agreement gate. The Track-A/Track-B tolerance-band agreement claim therefore concerns the with-fees output of Track A against the on-bytecode invariant-fuzz behavior of Track B; the with-fees correction to each table entry is $O(f_b) = O(10^{-3})$ and is reported separately in Appendix~\ref{app:with-fees}.
-
-\subsection{Baseline projection: 36 months at \$100k/month}
-\label{sec:numerical-baseline}
-
-The canonical baseline scenario S1 fixes monthly revenue at \$100{,}000 (deterministic), zero organic trading volume, the genesis parameters of Section~\ref{sec:protocol-genesis} ($\Tres_0 = \$1\text{M}$, $L_{s,0} = \$750\text{k}$, $\Sup_0 = 10^9$, 75/25 LP/vesting split), and the design constants (50/50 router split, 0.10\%/3\% buy/sell fee, 0.25\% caller bounty). The 12-month subhorizon is tabulated as Table~\ref{tab:baseline-12mo}; the full 36-month run (Figure~\ref{fig:floor-trajectory}) shows the floor and spot trajectories evolving beyond the LP half-life $n_{1/2} = 15$ months (Theorem~\ref{thm:lp-half-life}).
+\paragraph{Baseline 12-month projection.} S1: monthly revenue \$100k, zero organic volume, genesis parameters of Section~\ref{sec:protocol}. Table~\ref{tab:baseline-12mo}; 36-month extension in Figure~\ref{fig:floor-trajectory}.
 
 \begin{table}[t]
 \centering
-\small
-\caption{Baseline scenario S1 over the first 12 months (deterministic, no organic flow), under \emph{fee-free curve math} for hand-checkability of the recurrence. The $0.10\%$ buy fee adjustment is $O(f_b)$ on each entry and is tabulated in Appendix~\ref{app:with-fees}. Floor $+140\%$ and spot $+224\%$ over 12 months. Supply burned: $33.3\%$ of initial.}
+\footnotesize
+\caption{Baseline scenario S1, first 12 months (deterministic, no organic flow, fee-free curve math). Floor $+140\%$, spot $+224\%$ over 12 months; supply burned $33.3\%$.}
 \label{tab:baseline-12mo}
 \begin{tabular}{rrrrrrr}
 \toprule
@@ -43,98 +31,44 @@ The canonical baseline scenario S1 fixes monthly revenue at \$100{,}000 (determi
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=0.85\textwidth]{figures/fig-floor-trajectory.pdf}
-\caption{Floor (solid blue), spot (dashed red), and supply (right axis, dotted green) under the baseline scenario S1 over a 36-month horizon, computed from the deterministic recurrence of Section~\ref{sec:economic-analysis} (fee-free curve math).\protect\footnotemark{} The vertical guide at month 15 marks the LP half-life predicted by Theorem~\ref{thm:lp-half-life}. Spot diverges from floor monotonically over the 36-month horizon under the assumed zero-organic-flow regime, reaching $\Spot/\Floor \approx 1.94$ at month 36; the gap reflects the LP becoming stable-heavy as buy-and-burn drains its token leg.}
+\includegraphics[width=0.55\textwidth]{fig-floor-trajectory.pdf}
+\caption{Floor (solid blue), spot (dashed red), and supply (right axis, dotted green) under baseline S1 over a 36-month horizon. The vertical guide at month 15 marks the LP half-life predicted by Theorem~\ref{thm:lp-half-life}; spot diverges from floor monotonically, reaching $\Spot/\Floor \approx 1.94$ at month 36.}
 \label{fig:floor-trajectory}
 \end{figure}
-\footnotetext{All figures in this section are closed-form projections from the deterministic recurrence of Section~\ref{sec:economic-analysis}, generated by \texttt{simulation/generate\_figures.py} in the reproducibility artifact. The Hardhat v3 invariant suite is wired in \texttt{contracts/} and runs as Track B (fast gate on every push/PR; full gate on the \texttt{v0.1.1-paper-v1} tag); the full organic-flow Monte Carlo is reported in the empirical follow-up paper sketched in Section~\ref{sec:conclusion}. Figure~\ref{fig:montecarlo-bands} of this section is a synthetic stochastic-revenue extension of the same closed-form recurrence.}
 
-The 12-month observable outcomes of Table~\ref{tab:baseline-12mo} are reproduced exactly by the closed-form deterministic recurrence of Section~\ref{sec:economic-analysis}; the cross-track agreement gate runs in CI on every commit; the further empirical follow-up paper sketched in Section~\ref{sec:conclusion} extends Track B with mainnet-fork integration tests and post-deployment observed-flow data. The 36-month extension shows the LP thinning regime: spot decouples from floor as the LP becomes stable-heavy, and after month $\approx 24$ the system enters the redemption-dominant regime in which the AMM serves as a thin arbitrage layer and the redemption channel is the primary exit.
-
-\subsection{Sensitivity sweep: revenue rate}
-\label{sec:numerical-revenue}
-
-We sweep monthly revenue $R \in \{\$25\text{k}, \$50\text{k}, \$100\text{k}, \$250\text{k}, \$500\text{k}, \$1\text{M}\}$ over a 36-month horizon. The closed-form prediction from Theorem~\ref{thm:lp-half-life} is $n_{1/2}(R) = L_{s,0}/(R/2) = 2 L_{s,0}/R$ (fee-free curve math; the $1/(1-f_b)$ correction is $O(f_b) = O(10^{-3})$), ranging from 60 months at $R = \$25\text{k}$ down to 1.5 months at $R = \$1\text{M}$. The cumulative floor at month 36 grows roughly as $\sqrt{R}$ in the LP-rich regime and saturates as the LP thins (because the marginal tokens-per-dollar of buy-and-burn falls as $\Ls$ grows).
+\paragraph{Adversarial scenarios and design-space sweep.} \emph{S2 (revenue stops)}: $R \to 0$ at $t_{\text{stop}} \in \{6, 12, 24\}$; floor constant onward (Theorem~\ref{thm:spot-floor-convergence}~(1)); redemption channel unaffected. \emph{S3 (mass redemption)}: $\{25\%, 50\%, 75\%\}$ of supply at month 12; funding ratio $= 1.0$ to within the integer residual (Lemma~\ref{lem:integer-redemption}). \emph{S4 (mass dump)}: spot collapses, $\Phit$ fills, the next \texttt{collectFees} steps the floor by the closed-form of Section~\ref{sec:formal-invariants}. \emph{S5 (adversarial-mixed)}: the saturated mixed strategy of Theorem~\ref{thm:bank-run}~(2); yield surface and saturation locus $\alpha = A^*/N$ in Figure~\ref{fig:attacker-phasediagram}. \emph{S6 (organic-volume)}: $V \in \{\$10\text{k}, \$50\text{k}, \$200\text{k}, \$500\text{k}, \$1\text{M}\}$/month; fee-source parity with each revenue-funded leg at $V \approx \$2.3$M/month. Revenue, LP-split, fee-asymmetry, and Monte Carlo sweep figures are in the Zenodo artifact.
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=0.85\textwidth]{figures/fig-revenue-sweep.pdf}
-\caption{Sensitivity sweep on monthly revenue. Month-36 floor (blue circles, left axis) and LP half-life $n_{1/2}(R)$ (red squares, right axis) for $R \in \{\$25\text{k}, \$50\text{k}, \$100\text{k}, \$250\text{k}, \$500\text{k}, \$1\text{M}\}$, computed from the deterministic recurrence under fee-free curve math. The floor at month 36 is a sub-linear function of $R$ because LP thinning curtails the marginal burn efficiency.}
-\label{fig:revenue-sweep}
-\end{figure}
-
-\subsection{Sensitivity sweep: LP/vesting split}
-\label{sec:numerical-lp-split}
-
-We sweep the genesis LP allocation $\rho_{\text{LP}} \in \{50\%, 60\%, 75\%, 85\%, 90\%\}$ of total supply with the remainder going to the vesting vault. This sweep is illustrative: the canonical M\textsuperscript{2} design is $\rho_{\text{LP}} = 75\%$ (Section~\ref{sec:protocol-genesis}); other splits are reachable only by deploying a separate token. Two metrics are reported: (i) the LP half-life, which scales linearly with $\rho_{\text{LP}}$ via Theorem~\ref{thm:lp-half-life}; (ii) the floor at month 36 under baseline revenue. The Pareto trade-off is between LP longevity (higher $\rho_{\text{LP}}$ extends the tradable regime) and floor speed (lower $\rho_{\text{LP}}$ accelerates per-token floor growth at the cost of LP thinning).
-
-\begin{figure}[t]
-\centering
-\includegraphics[width=0.85\textwidth]{figures/fig-lp-frontier.pdf}
-\caption{Pareto frontier across five LP/vesting split values $\rho_{\mathrm{LP}} \in \{50\%, 60\%, 75\%, 85\%, 90\%\}$ at the baseline $\$100$k/month revenue. Each point reports (LP half-life $n_{1/2}$, month-36 floor) under the deterministic recurrence with the floor-spot genesis constraint $\Tres_0/\Sup_0 = L_{s,0}/L_{t,0}$ enforced at each split. The 75/25 canonical choice is marked (red star); the surrounding values demonstrate the trade-off between LP longevity and floor compounding.}
-\label{fig:lp-frontier}
-\end{figure}
-
-\subsection{Sensitivity sweep: asymmetric fee}
-\label{sec:numerical-fee}
-
-We sweep the sell-side fee $f_s \in \{0\%, 1\%, 3\%, 5\%, 10\%\}$ while holding the buy-side fee at the design's 0.10\%. Two effects are decomposed: (i) at the swap moment, a higher $f_s$ shifts more value into the v4 fee accumulator $\Phit$, which on \texttt{collectFees} translates to a token-side burn; (ii) the holder-side disincentive on sells suppresses adversarial dump-channel use (Theorem~\ref{thm:bank-run}: $A^*$ shrinks as $f_s$ rises, because the marginal post-fee LP spot $(1 - f_s) \Spot$ drops relative to the floor sooner).
-
-Figure~\ref{fig:fee-attribution} shows a stacked-bar decomposition of monthly floor growth into three sources: revenue-deposit (Case~1), buy-and-burn (Case~2), and \texttt{collectFees} (Case~7). At $f_s = 0$, source~(3) is dominated by the buy-side 0.10\% fee, and floor growth is driven almost entirely by sources~(1) and~(2). At $f_s = 10\%$, source~(3) becomes the dominant component under any organic-flow regime with appreciable sell volume.
-
-\begin{figure}[t]
-\centering
-\includegraphics[width=0.85\textwidth]{figures/fig-fee-attribution.pdf}
-\caption{Decomposition of monthly floor growth by source (treasury deposit, buy-and-burn, sell-fee burn from organic flow) across $f_s \in \{0\%, 1\%, 3\%, 5\%, 10\%\}$, at organic sell volume $V = \$200\text{k}/\text{month}$ and the canonical month-12 state. Components are expressed in treasury-equivalent USD per month (the sell-fee component values burned tokens at the floor and incorporates the $0.25\%$ caller-bounty leakage). The 3\% design value is the smallest $f_s$ at which the sell-fee source contributes a non-trivial share under the canonical organic-volume regime.}
-\label{fig:fee-attribution}
-\end{figure}
-
-\subsection{Adversarial scenarios}
-\label{sec:numerical-adversarial}
-
-Five adversarial scenarios drawn from the simulation plan exercise the protocol under coordinated holder behavior.
-
-\paragraph{S2 (revenue stops).} Revenue $\to 0$ at month $t_{\text{stop}} \in \{6, 12, 24\}$. Floor is constant from $t_{\text{stop}}$ onward (Theorem~\ref{thm:spot-floor-convergence}~(1)); under the assumed zero organic flow, spot also stalls until any future sell triggers a \texttt{collectFees} micro-tick. The redemption channel remains fully functional; the system enters the CEF analog regime.
-
-\paragraph{S3 (mass redemption).} 25\%/50\%/75\% of circulating supply redeems at month 12. The Track-A self-check verifies that the redemption funding ratio (the ratio of stable paid out to the floor-times-tokens-burned) equals 1.0 to within the integer-arithmetic residual; this is a sanity test for the implementation rather than a result. Floor is invariant by Lemma~\ref{lem:integer-redemption}.
-
-\paragraph{S4 (mass dump).} The same supply fractions are dumped to the LP at month 12 instead of redeemed. The LP becomes stable-light (its $\Ls$ partially drains); the immediate spot collapses; the v4 fee accumulator fills with token-side fees; on the next \texttt{collectFees} the floor steps up by an amount predictable from the closed form of Section~\ref{sec:formal-invariants}. Figure~\ref{fig:attacker-phasediagram} shows the attacker's yield surface $\Pi^*(\alpha, N)$ alongside the saturation curve $\alpha = A^*/N$ from Theorem~\ref{thm:bank-run}.
-
-\paragraph{S5 (adversarial-mixed).} The attacker plays the saturated mixed strategy of Theorem~\ref{thm:bank-run}~(2). The yield surface is plotted against $(\alpha, N)$ in Figure~\ref{fig:attacker-phasediagram}; the dotted curve is the optimal strategy locus.
-
-\paragraph{S6 (organic-volume regimes).} Monthly organic sell volume $V \in \{\$10\text{k}, \$50\text{k}, \$200\text{k}, \$500\text{k}\}$. Figure~\ref{fig:organic-volume} shows the floor's growth rate as a function of $V$; at $V = \$500\text{k}$/month, the fee-collection source contributes roughly one third of the buy-and-burn source's floor-compounding effect, and parity with buy-and-burn is reached at $V \approx \$1.6\text{M}$/month under the canonical month-12 state. We report the floor's dependence on $V$ as a sweep parameter rather than fixing a single baseline organic-volume assumption.
-
-\begin{figure}[t]
-\centering
-\includegraphics[width=0.85\textwidth]{figures/fig-attacker-phasediagram.pdf}
-\caption{Attacker phase diagram at the canonical month-12 state. Heatmap of $\Pi(\alpha, N)/N = \big[\Ls - \kInv/(\Lt + (1-f_s)\alpha N) + (1-\alpha) N \Floor\big]/N$ on an $(\alpha, N)$ grid with $N$ on log scale from $10^6$ to $10^9$ tokens. The white dashed curve is the saturation locus $\alpha = A^*/N$ from Theorem~\ref{thm:bank-run} with $A^* \approx 6.20 \cdot 10^7$. Below $N = A^*$ the optimum is $\alpha = 1$ (pure dump); above, the optimum lies on the saturation curve.}
+\includegraphics[width=0.55\textwidth]{fig-attacker-phasediagram.pdf}
+\caption{Attacker phase diagram at the canonical month-12 state. Heatmap of $\Pi(\alpha, N)/N$ on an $(\alpha, N)$ grid with $N$ on log scale from $10^6$ to $10^9$ tokens. The white dashed curve is the saturation locus $\alpha = A^*/N$ from Theorem~\ref{thm:bank-run} with $A^* \approx 6.20 \cdot 10^7$. Below $N = A^*$ the optimum is $\alpha = 1$ (pure dump); above, the optimum lies on the saturation curve.}
 \label{fig:attacker-phasediagram}
 \end{figure}
 
-\begin{figure}[t]
+\paragraph{Cross-protocol comparison.} Table~\ref{tab:protocol-comparison} positions M\textsuperscript{2} against five DeFi comparators---OHM \citep{OlympusDAO2021}, RAI \citep{Reflexer2021}, Frax \citep{Frax2021}, Liquity \citep{Liquity2021}, Dai \citep{Maker2019}---and the canonical TradFi closed-end-fund row.
+
+\begin{table}[t]
 \centering
-\includegraphics[width=0.85\textwidth]{figures/fig-organic-volume.pdf}
-\caption{Scenario S6: monthly floor growth by source across organic-sell-volume regimes $V \in \{\$10\text{k}, \$50\text{k}, \$200\text{k}, \$500\text{k}, \$1\text{M}\}$ at the canonical month-12 state with $f_s = 0.03$. The sell-fee burn component scales linearly with $V$ while the revenue-funded treasury and buy-and-burn components remain constant at \$50k each. At $V = \$1\text{M}$/month the sell-fee source reaches roughly $44\%$ of each revenue-funded source; full parity is reached at $V \approx \$2.3\text{M}$/month per revenue-funded leg. We report this as a sweep rather than as a baseline.}
-\label{fig:organic-volume}
-\end{figure}
+\scriptsize
+\caption{Comparison matrix across seven design dimensions. ``Fixed supply'' refers to whether the protocol can mint new units of the primary asset post-genesis. ``On-chain redemption'' is a contractually enforceable exit at a protocol-defined price (versus secondary-market only). ``Floor invariant'' indicates whether a per-unit reserve claim is non-decreasing by contract. ``Op. dep.'' indicates whether the protocol's growth (not its safety) depends on a centralized off-chain actor.}
+\label{tab:protocol-comparison}
+\renewcommand{\arraystretch}{1.18}
+\begin{tabular}{p{1.5cm} p{1.25cm} p{1.55cm} p{1.4cm} p{1.5cm} p{1.4cm} p{1.0cm} p{1.85cm}}
+\toprule
+\textbf{Protocol} & \textbf{Fixed supply?} & \textbf{On-chain redemption?} & \textbf{Treasury composition} & \textbf{Floor invariant?} & \textbf{Gov.} & \textbf{Op. dep.} & \textbf{Primary risk} \\
+\midrule
+M\textsuperscript{2} & Yes; supply only decreases & Yes; at $\Floor = \Tres/\Sup$ & Single exog.\ stable; one-way in & Yes; non-decreasing by Thm~\ref{thm:floor-monotonicity} & None & Growth only & Smart-contract bug; stable issuer \\
+OHM (OlympusDAO) & No; staking rebases up & No (governance vote-gated burn proposals only) & Multi-asset; rebalance by governance & No (``RFV per token'' is rhetorical) & Active gov. & Low (community treasury) & Confidence collapse; gov.\ capture \\
+RAI (Reflexer) & No; PID mint/burn & Yes; against ETH at redemption price & ETH collateral via Safe vaults & No (redemption price mean-reverts) & Minimal & None & Oracle manip.; vault liquidation cascade \\
+Frax & No; algorithmic + collateralized & Yes; against AMO-managed reserves & Multi-stable + algorithmic & No (peg target, not floor) & Active gov. & Mod. & Peg loss; AMO mispricing \\
+Liquity (LUSD) & No; mintable against ETH & Yes; against ETH at \$1 + 0.5\% fee & ETH-only via troves & No (peg target, not floor) & None & None & ETH price crash + recovery-mode cascade \\
+MakerDAO (Dai) & No; CDP-style mint & Yes; CDP unwind only & Multi-collateral & Limited (per-vault) & Active gov. & Low & Black-swan oracle deviation; gov.\ capture \\
+\midrule
+TradFi CEF (closed-end fund) & Effectively yes & No (secondary market only) & Multi-asset, manager-discretion & No (NAV fluctuates; persistent discount) & Board / sh. & Yes (manager) & Discount-to-NAV persistence; mgmt.\ extraction \\
+\bottomrule
+\end{tabular}
+\end{table}
 
-\subsection{Monte Carlo: stochastic revenue and organic flow}
-\label{sec:numerical-mc}
+\emph{What the table shows.} Three dimensions discriminate M\textsuperscript{2}: (i) \emph{floor invariance}---only M\textsuperscript{2} contractually enforces a non-decreasing per-unit reserve claim (OHM's ``RFV'' is rhetorical, RAI mean-reverts, Frax/Liquity target pegs, Dai has only per-vault floors, CEFs publish NAV without redemption); (ii) \emph{supply discipline}---only M\textsuperscript{2} guarantees post-genesis supply can only decrease; (iii) \emph{governance surface}---M\textsuperscript{2} and Liquity are the only governance-free entries, but M\textsuperscript{2}'s asset is not a stablecoin and its reserve is external. The CEF row anchors the cross-domain comparison: the persistent discount-to-NAV \citep{LeeShleiferThaler1991,Pontiff1996} arises from the absence of contractual NAV-redemption; M\textsuperscript{2} adds NAV monotonicity, which has no TradFi analog.
 
-We replace deterministic revenue with a lognormal monthly-revenue process at the canonical mean. \emph{Revenue}: lognormal monthly draws with shape parameter $\sigma_X = 1.0$ and location calibrated so $E[R] = \$100$k/month. Organic-flow GBM and the joint Poisson-arrival/$\sigma_X$ sweep are deferred to the empirical follow-up paper, where they will be calibrated to live deployment data rather than to synthetic comparables.
-
-Figure~\ref{fig:montecarlo-bands} reports the floor's 5/50/95 quantile bands across $10^4$ Monte Carlo paths under lognormal monthly revenue with $\sigma_X = 1.0$ and $E[R] = \$100$k, seed \texttt{42}. The floor's 5\%-quantile path remains monotonically above $\$0.001$ across the entire 36-month horizon; the median path tracks a few percent below the deterministic baseline (a systematic gap reflecting the median-vs-mean wedge of lognormal monthly revenue, which has median $e^{-\sigma_X^2/2} \approx 0.61$ of its mean for $\sigma_X = 1$), with the maximum absolute deviation bounded by $\sim 5\%$ over the horizon; the 95\%-quantile path benefits from the asymmetric-fee mechanism whenever the spot's volatility induces large sells.
-
-\begin{figure}[t]
-\centering
-\includegraphics[width=0.85\textwidth]{figures/fig-montecarlo-bands.pdf}
-\caption{Monte Carlo floor bands: $10{,}000$ paths over 36 months under lognormal monthly revenue ($\sigma_X = 1.0$, $E[R] = \$100$k), seed \texttt{42}. The 5\% quantile (lower band edge) remains weakly increasing in every sample path, consistent with Theorem~\ref{thm:floor-monotonicity}. The deterministic baseline (dashed red) tracks the median closely. This figure is a synthetic stochastic extension of the same closed-form recurrence; the full simulator-track Monte Carlo, calibrated to organic-flow and Hardhat-v3-invariant-test data, is reported in the empirical follow-up paper.}
-\label{fig:montecarlo-bands}
-\end{figure}
-
-\subsection{Reproducibility}
-\label{sec:numerical-reproducibility}
-
-The simulator codebase is released under the MIT License at Zenodo DOI \href{https://doi.org/10.5281/zenodo.20255141}{\texttt{10.5281/zenodo.20255141}}. The repository's top-level \texttt{make reproduce} regenerates every figure and table in this section from the deterministic seeds pinned in the configuration. The git tag \texttt{v0.1.1-paper-v1} pins the version cited; subsequent versions (post-deployment empirical follow-up) will increment the tag. The Hardhat v3 invariant-test suite (in \texttt{contracts/}) is invoked by \texttt{npx hardhat test} or the equivalent root-level \texttt{make fuzz} alias; CI runs both tracks on every PR and rejects merges that introduce divergence.
-
-A reviewer of the paper can verify the entire numerical section as follows. Clone the repository, check out \texttt{v0.1.1-paper-v1}, install the documented Python and Hardhat v3 toolchains, and run \texttt{make verify}: this performs Track A, Track B, and the agreement gate, and writes a SHA-256 manifest of every generated artifact. A reviewer-supplied diff against the paper's figure files should reproduce the SHA-256 manifest exactly.
+\paragraph{Reproducibility.} MIT-licensed simulator at Zenodo DOI \href{https://doi.org/10.5281/zenodo.20255141}{\texttt{10.5281/zenodo.20255141}}, tag \texttt{v0.2.0-paper-v2}: \texttt{make reproduce} regenerates every figure/table from pinned seeds; \texttt{make verify} runs Track A, Track B, the agreement gate, and writes a SHA-256 manifest.

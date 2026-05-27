@@ -5,9 +5,8 @@ A provably floor-preserving tokenomic primitive for revenue-bearing on-chain ass
 [![Paper PDF](https://img.shields.io/badge/paper-PDF-blue)](paper/main.pdf)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20255140.svg)](https://doi.org/10.5281/zenodo.20255140)
-[![SSRN](https://img.shields.io/badge/SSRN-6781499-blueviolet)](https://ssrn.com/abstract=6781499)
 
-> **Latest maintenance release:** `v0.1.2-paper-v1` (2026-05-18) — Zenodo DOI [10.5281/zenodo.20261616](https://doi.org/10.5281/zenodo.20261616). Code-only fix (Hardhat-v3 EDR invariant discovery); paper, figures, simulator, and reference-contract behaviour are unchanged from `v0.1.1-paper-v1`. The concept DOI `10.5281/zenodo.20255140` above resolves to the current version.
+> **Latest release:** `v0.2.0-paper-v2` — conference-length (15-page) presentation of the paper. All theorems, proofs, and numerical constants preserved verbatim from the prior `v0.1.2-paper-v1` long-form release. The concept DOI `10.5281/zenodo.20255140` above resolves to the current version.
 
 ## Overview
 
@@ -52,11 +51,11 @@ latexmk -pdf main.tex
 eval "$(/usr/libexec/path_helper)"
 ```
 
-See [`paper/README.md`](paper/README.md) for full build details and LNCS-class-swap instructions for FC 2027 submission.
+See [`paper/README.md`](paper/README.md) for full build details and the typography deviations the 15-page variant uses.
 
 ### Regenerate the figures
 
-The simulator reproduces every figure (Figs. 2–8) of paper §6 deterministically. Tested on Python 3.10+.
+The simulator reproduces all eight figures of the long-form §6 deterministically — the conference-length paper embeds two of them (floor-trajectory, attacker-phasediagram) in the body and references the rest as Zenodo-artifact extensions. Tested on Python 3.10+.
 
 ```bash
 cd simulation
@@ -82,6 +81,7 @@ Output PDFs and PNGs are written to `../paper/figures/`. The script is determini
 │   ├── references.bib
 │   ├── sections/          one .tex file per section
 │   ├── figures/           generated PDFs/PNGs (see simulation/)
+│   ├── supplementary-threat-model.tex  standalone supplementary
 │   └── README.md          build instructions
 ├── simulation/            Python figure generator
 │   ├── generate_figures.py
@@ -103,7 +103,7 @@ If you use M² in academic work, please cite the paper:
   howpublished = {Working paper / preprint},
   doi          = {10.5281/zenodo.20255141},
   url          = {https://doi.org/10.5281/zenodo.20255141},
-  note         = {Zenodo deposit v0.1.1-paper-v1; SSRN preprint \url{https://ssrn.com/abstract=6781499}. ORCID: 0009-0005-2573-3336.}
+  note         = {Zenodo deposit v0.2.0-paper-v2. ORCID: 0009-0005-2573-3336.}
 }
 ```
 
@@ -123,7 +123,7 @@ The following disclosures mirror the *Disclosures* section of the paper.
 
 **Conflict of interest.** The author intends to deploy a reference implementation of the M² protocol described in this paper. The mechanism is intended for open-source release as a non-proprietary tokenomics primitive available to any DeFi project; the author claims no proprietary rights over the design and does not hold a financial interest in any specific instance of the protocol beyond the reference deployment. Readers should weigh this intended deployment when interpreting the qualitative framing of the paper, though all quantitative claims are derivable from the protocol specification and the closed-form analysis of paper §§4–5 and do not depend on any operational assumption about a specific deployment.
 
-**Code and data availability.** The simulator code and figure-generation scripts are in this repository under the MIT License. The reference contract implementation will be developed in [`contracts/`](contracts/) and released under the same license. The v0.1.1-paper-v1 artifact is deposited on Zenodo: version DOI [10.5281/zenodo.20255141](https://doi.org/10.5281/zenodo.20255141); the concept DOI [10.5281/zenodo.20255140](https://doi.org/10.5281/zenodo.20255140) tracks subsequent versions and resolves to the latest. A preprint of the paper is hosted on SSRN ([abstract 6781499](https://ssrn.com/abstract=6781499)); an arXiv version (`cs.CR` primary, `q-fin.GN` cross-list) will follow once endorsement is obtained.
+**Code and data availability.** The simulator code and figure-generation scripts are in this repository under the MIT License. The reference contract implementation will be developed in [`contracts/`](contracts/) and released under the same license. The v0.2.0-paper-v2 artifact is deposited on Zenodo: version DOI [10.5281/zenodo.20255141](https://doi.org/10.5281/zenodo.20255141); the concept DOI [10.5281/zenodo.20255140](https://doi.org/10.5281/zenodo.20255140) tracks subsequent versions and resolves to the latest.
 
 ## Contact
 

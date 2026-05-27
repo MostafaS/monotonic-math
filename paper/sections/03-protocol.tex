@@ -2,19 +2,17 @@
 \section{Protocol Specification}
 \label{sec:protocol}
 
-This section specifies M\textsuperscript{2} as a complete deployable system: four immutable contracts, the genesis ceremony that links them, the operations they expose, and a threat model that delimits the conditions under which the formal guarantees of Section~\ref{sec:formal-invariants} hold. We adhere to the notation introduced in Section~\ref{sec:introduction} and standardized in Appendix~\ref{app:symbols}: $\Tres$ for the treasury stablecoin balance, $\Sup$ for the total token supply, $\Floor = \Tres/\Sup$ for the floor price, $(\Lt, \Ls)$ for the active reserves of the protocol-owned liquidity-pool position, and $\Spot = \Ls/\Lt$ for the AMM spot price.
+This section specifies M\textsuperscript{2} as a deployable system: four immutable contracts, a genesis ceremony, the operations they expose, and a threat model that delimits the conditions under which the formal guarantees of Section~\ref{sec:formal-invariants} hold. Notation follows Appendix~\ref{app:symbols}.
 
-\subsection{System overview}
-\label{sec:protocol-overview}
-
-M\textsuperscript{2} is composed of four contracts---a token, a treasury, an asymmetric-fee liquidity-pool hook, and a revenue router---together with a single off-protocol agent, the \emph{operator}, who routes business revenue (denominated in the backing stablecoin) into the router. Figure~\ref{fig:architecture} shows the full system. Each contract is deployed once and has no admin key, no governance hook, no upgrade path, and no parameter-change interface. There is no proxy pattern: the bytecode at each address is its final form.
+\paragraph{System.} M\textsuperscript{2} is composed of four contracts---a token, a treasury, an asymmetric-fee LP hook, and a revenue router---together with one off-protocol \emph{operator} who routes business revenue (denominated in the backing stable) into the router.\footnote{The Solidity reference implementation is at the Zenodo artifact referenced in the abstract; the bytecode is the contract.} Each contract is deployed once with no admin key, governance hook, upgrade path, or parameter-change interface. Figure~\ref{fig:architecture} shows the system. Dynamics: (i) the operator deposits revenue $X$ into the router, which atomically deposits $X/2$ into the treasury and uses $X/2$ for a buy-and-burn on the protocol-owned LP; (ii) holders invoke either \texttt{redeem} on the token (atomic, no cooldown, no fee) or an LP swap (asymmetric per-direction fee enforced by the hook); (iii) any external caller may invoke \texttt{collectFees}, which routes $99.75\%$ of token-side fees to burn and $99.75\%$ of stable-side fees to the treasury, with $0.25\%$ per side paid as a caller bounty.
 
 \begin{figure}[t]
 \centering
+\resizebox{0.6\textwidth}{!}{%
 \begin{tikzpicture}[
-  node distance=1.8cm and 2.4cm,
-  contract/.style={draw, thick, rounded corners=2pt, minimum width=3.4cm, minimum height=1.0cm, align=center, font=\small},
-  business/.style={draw, thick, dashed, rounded corners=2pt, minimum width=2.6cm, minimum height=0.7cm, align=center, font=\small},
+  node distance=1.5cm and 2.0cm,
+  contract/.style={draw, thick, rounded corners=2pt, minimum width=3.2cm, minimum height=0.9cm, align=center, font=\small},
+  business/.style={draw, thick, dashed, rounded corners=2pt, minimum width=2.4cm, minimum height=0.6cm, align=center, font=\small},
   every node/.style={font=\small},
   flow/.style={->, thick, >=stealth},
   feeflow/.style={->, thick, >=stealth, dashed, gray!70!black},
@@ -25,59 +23,28 @@ M\textsuperscript{2} is composed of four contracts---a token, a treasury, an asy
   \node[contract, immut, below=of token] (hook) {LP + V4 Hook \\ \scriptsize asym.\ fees, anti-MEV};
   \node[contract, immut, below=of treas] (router) {Revenue Router \\ \scriptsize 50/50 split, immutable};
   \node[business, below=0.9cm of router] (biz) {Business};
-
-  % Primary flows (solid)
   \draw[flow] (token) -- node[above, font=\scriptsize]{redeem} (treas);
   \draw[flow] (hook) -- node[left, font=\scriptsize]{burn} (token);
   \draw[flow] (router) -- node[above, font=\scriptsize]{50\%} (treas);
   \draw[flow] (router) -- node[above, font=\scriptsize]{50\%, buy} (hook);
   \draw[flow] (biz) -- node[right, font=\scriptsize]{routeRevenue} (router);
-
-  % collectFees realization paths (dashed gray, routed on opposite sides)
   \draw[feeflow] (hook.west) to[out=180, in=200, looseness=1.5]
       node[left, font=\scriptsize, align=right]{collectFees:\\token burn} (token.west);
   \draw[feeflow] (hook.south east) to[out=-20, in=-90, looseness=1.4]
       node[below right=2pt, font=\scriptsize, align=left]{collectFees:\\stable to $\Tres$} (treas.south east);
-\end{tikzpicture}
-\caption{System architecture. Blue-tinted boxes are immutable contracts; the dashed box denotes the off-protocol operator. Solid arrows mark primary flows; dashed gray arrows mark the permissionless \texttt{collectFees} fee-realization paths (token side: $99.75\%$ burned, $0.25\%$ to caller; stable side: $99.75\%$ to treasury, $0.25\%$ to caller). All inflows to Treasury are one-way: stablecoin can leave only via \texttt{redeem}, which simultaneously burns the redeemed tokens.}
+\end{tikzpicture}}
+\caption{System architecture. Blue-tinted boxes are immutable contracts; the dashed box is the off-protocol operator. Solid arrows mark primary flows; dashed gray arrows mark the permissionless \texttt{collectFees} realization paths (token side: $99.75\%$ burned, $0.25\%$ to caller; stable side: $99.75\%$ to treasury, $0.25\%$ to caller). All inflows to Treasury are one-way: stablecoin can leave only via \texttt{redeem}, which simultaneously burns the redeemed tokens.}
 \label{fig:architecture}
 \end{figure}
 
-The high-level dynamics are: (i) the operator deposits revenue $X$ (denominated in the backing stable) into the router; (ii) the router atomically deposits $X/2$ into the treasury and uses $X/2$ to execute a market buy on the protocol-owned LP, burning the tokens received; (iii) holders may at any time invoke either \texttt{redeem} on the token (atomic, no cooldown, no fee) or a swap against the LP (with an asymmetric per-direction fee enforced by the hook); (iv) any external caller may invoke \texttt{collectFees}, which realizes the LP-position's accrued fee growth and routes $99.75\%$ of the token-side fees to burn and $99.75\%$ of the stable-side fees to the treasury, with the residual $0.25\%$ per side paid as a bounty to the caller.
-
-\subsection{Token}
-\label{sec:protocol-token}
-
-The token is an ERC-20 contract with $18$ decimals and a total supply $\Sup_0 = 10^9$ tokens minted to the deployer in a single transaction at genesis. The \texttt{mint} function is gated by an immutable constructor-set sentinel that, once consumed by the genesis mint, blocks all further minting. Three roles can call \texttt{burn(address, uint256)}: the hook (when realizing token-side LP fees), the router (when executing buy-and-burn), and the token's own \texttt{redeem} entry point. No other path reduces supply.
-
-The \texttt{redeem(uint256 amount)} function is the load-bearing TradFi analogue. It is atomic, non-pausable, and has no cooldown, no fee, and no maximum. It burns the caller's \texttt{amount} tokens, computes the payout as $\texttt{amount} \times \texttt{floorPrice}()$ in the stable's smallest unit, and instructs the treasury to transfer that amount to the caller via the privileged \texttt{payRedemption} interface. The function reverts only if the caller's balance is insufficient or if $\Sup = 0$ (the boundary case is handled by a dedicated \texttt{SupplyExhausted} error; by construction, when $\Sup = 0$ the treasury balance is also zero, so the revert locks no value).
-
-\paragraph{Precision and stable-decimals neutrality.} The floor function returns an 18-decimal fixed-point value regardless of the backing stable's native decimals $\dstab$:
+\paragraph{Token, redemption, floor precision.} The token is an ERC-20 with $18$ decimals and total supply $\Sup_0 = 10^9$ minted to the deployer in a single transaction; the constructor-set genesis-mint sentinel blocks all further minting. Three callers can \texttt{burn}: the hook (token-side LP fees), the router (buy-and-burn), and the token's own \texttt{redeem}. \texttt{redeem(uint256 amount)} is atomic, non-pausable, with no cooldown, fee, or maximum: it burns the caller's tokens, computes the payout as $\texttt{amount} \times \texttt{floorPrice}()$, and instructs the treasury to transfer via the privileged \texttt{payRedemption} interface. The floor returns an 18-decimal fixed-point value regardless of the stable's native decimals $\dstab$:
 \begin{equation}
 \texttt{floorPrice}() = \frac{\Tres \cdot 10^{18 + 18 - \dstab}}{\Sup},
 \label{eq:floor-precision}
 \end{equation}
-with the wide intermediate $\Tres \cdot 10^{18+18-\dstab}$ taken in \texttt{uint256}. For USDC ($\dstab = 6$) the upscale factor is $10^{30}$; for DAI ($\dstab = 18$) it is $10^{18}$. With the genesis parameters of Section~\ref{sec:protocol-genesis}, the intermediate is bounded above by $10^{18+18-6} \cdot \Tres \le 10^{30} \cdot 10^{12}\,\text{(\$)} = 10^{42} \ll 2^{256} \approx 1.16 \cdot 10^{77}$, so no overflow can occur in any realistic deployment.
+with the wide intermediate in \texttt{uint256}; $10^{42} \ll 2^{256}$ rules out overflow. Integer truncation can leave at most $\Sup - 1$ smallest units of dust in the treasury's favor per call; Lemma~\ref{lem:integer-redemption} shows the residual strictly raises the floor. The treasury exposes exactly one privileged entry point, \texttt{payRedemption}, callable only by the token contract; no admin, withdraw, pause, upgrade, or governance hook. Stablecoin leaves only through \texttt{payRedemption} in lockstep with a token burn.
 
-On redemption, the gross payout $\texttt{amount} \times \texttt{floorPrice}()$ is divided down to the stable's smallest unit before transfer. The truncation can leave at most $\Sup - 1$ smallest-units of dust in the treasury's favor per redemption call; Lemma~\ref{lem:integer-redemption} (Section~\ref{sec:formal-invariants}) shows that this residual strictly raises the floor and never lowers it.
-
-\subsection{Treasury}
-\label{sec:protocol-treasury}
-
-The treasury is the passive custodian of the backing stablecoin. It exposes exactly one privileged entry point, \texttt{payRedemption(address user, uint256 stableAmount)}, callable only by the token contract. It has no admin role, no withdraw function, no pause switch, no upgrade path, and no governance hook. The two inflow paths---the router's $50\%$ split and the $99.75\%$ stable-side share from \texttt{collectFees}---are one-way: stablecoin can leave only through \texttt{payRedemption}, and only in lockstep with a burn of the redeemed tokens via the token contract's \texttt{redeem} flow.
-
-The contract's invariants are: (i) $\Tres \geq 0$ at all times (enforced by the underlying ERC-20); (ii) every decrease of $\Tres$ is accompanied by a same-block burn of a token amount whose floor-product equals the stable outflow up to integer truncation in the treasury's favor (Lemma~\ref{lem:integer-redemption}); (iii) no caller other than the token contract can decrease $\Tres$. Together these properties give the treasury the structural role of a CEF reserve whose NAV-redemption mechanism is enforced at the bytecode level.
-
-\paragraph{Genesis seed.} The deployer transfers the treasury's genesis seed $\Tres_0$ in the same transaction that deploys the system. The seed must satisfy the floor-spot constraint $\Tres_0/\Sup_0 = L_{s,0}/L_{t,0}$, so that $\Floor_0 = \Spot_0$ at launch (Section~\ref{sec:protocol-genesis}). For the canonical parameters of this paper, $\Tres_0 = \$1{,}000{,}000$.
-
-\subsection{Liquidity pool and V4 hook}
-\label{sec:protocol-hook}
-
-The protocol-owned LP is a Uniswap v4 pool with token currency $\textsf{Token}$ and stable currency $\textsf{Stable}$, initialized with the \texttt{DYNAMIC\_FEE\_FLAG} so that fees are determined per-swap by the hook \citep{UniswapV4}. The protocol holds the LP position permanently; the contract owning the position has no externally callable removal interface, so the liquidity is provably unwithdrawable.
-
-\paragraph{Full-range position and V2-equivalence of the constant-product algebra.} The protocol-owned position is initialized as a \emph{single full-range position} spanning the maximum admissible tick interval $[\text{MIN\_TICK}, \text{MAX\_TICK}]$ at the pool's tick spacing. Under this configuration the pool has exactly one piecewise-constant liquidity segment, so v4's \emph{active liquidity} equals the position's liquidity at every reachable spot price. Concretely, the per-tick bookkeeping that v4 uses to support concentrated liquidity---tick-crossing, partial-range positions, segmented liquidity profiles---does not engage at any state the protocol can reach: the active reserves $(\Lt, \Ls)$ are the V2-style $x \cdot y = k$ reserves of a single pool, computed from the position's \texttt{liquidity} and the current \texttt{sqrtPriceX96} via the standard full-range identities. The constant-product invariant $\kInv = \Lt \cdot \Ls$ (Section~\ref{sec:formal-state}, Equation~\eqref{eq:state}) is exact at every reachable state, not an approximation, and the per-swap update preserves $\kInv$ exactly modulo the asymmetric-fee deduction described below. V4 is retained for its per-swap hook-fee primitive (Equation~\eqref{eq:fee-asymmetry}) and the position-locking semantics that make the LP unwithdrawable; no concentrated-liquidity feature is used. Throughout the paper, $(\Lt, \Ls)$ are read as the V2-style reserves of a full-range v4 position, with the v4 fee accumulator reconciled to the raw-mass framing $(\Phit, \Phis)$ in the footnote on Equation~\eqref{eq:fee-asymmetry}.
-
-\paragraph{Asymmetric fee mechanism.} On every swap, the hook's \texttt{beforeSwap} callback returns a fee override (OR'd with \texttt{LPFeeLibrary.OVERRIDE\_FEE\_FLAG}) determined by swap direction:
+\paragraph{Asymmetric-fee hook and V2-equivalent algebra.} The protocol-owned LP is a Uniswap v4 pool initialized with \texttt{DYNAMIC\_FEE\_FLAG} and a single \emph{full-range} position spanning $[\text{MIN\_TICK}, \text{MAX\_TICK}]$. Under this configuration v4's active liquidity equals the position's at every reachable price and per-tick concentrated-liquidity bookkeeping never engages: $(\Lt, \Ls)$ are V2-style reserves of a single piecewise-constant liquidity segment, and $\kInv = \Lt \cdot \Ls$ is exact modulo the asymmetric-fee deduction. The position-owning contract has no removal interface, so liquidity is provably unwithdrawable. On every swap, the hook's \texttt{beforeSwap} returns a fee override determined by direction:
 \begin{equation}
 \text{fee}(\text{direction}) =
 \begin{cases}
@@ -86,97 +53,41 @@ The protocol-owned LP is a Uniswap v4 pool with token currency $\textsf{Token}$ 
 \end{cases}
 \label{eq:fee-asymmetry}
 \end{equation}
-The fee is subtracted from the swap's input amount before the constant-product curve is applied: \texttt{SwapMath.computeSwapStep} deducts \texttt{step.feeAmount} from \texttt{amountIn} and folds the deduction into the input-currency-side accumulator, which we denote by raw-token mass $(\Phit, \Phis)$ in Section~\ref{sec:formal-state}.\footnote{The v4 implementation stores the accumulator as a Q128.128 fixed-point per-liquidity quantity \texttt{feeGrowthGlobalX128}; the position's realizable fee at collection is $K_{\text{real}} = (\Delta\text{accumulator}) \cdot \text{liquidity} / 2^{128}$, which equals the raw input-side fee mass deposited since the last collection. The raw-token framing used throughout this paper is dimensionally equivalent to the v4 accumulator and avoids the Q128.128 bookkeeping in the proofs.} Because the LP position is owned by the protocol, the accrued fee growth is realizable only by the protocol itself, via a subsequent \texttt{collectFees} call (Section~\ref{sec:protocol-collect}). The 0.10\% buy fee is a design choice rather than a revenue mechanism: v4's per-swap fee override (gated by \texttt{LPFeeLibrary.OVERRIDE\_FEE\_FLAG}) admits any 24-bit fee value, including zero, so a zero buy fee is technically expressible. We set the buy fee to a small nonzero value to keep both swap directions on the same fee-override code path and to standardize input-side fee accumulation across buy and sell legs; the resulting basis-point inflow to $\Phis$ is incidental rather than load-bearing. The 3.00\% sell fee, by contrast, is load-bearing: it converts every adversarial exit on the LP into common-pool value.
+The fee is subtracted from input before the curve and folded into the input-side accumulator, denoted $(\Phit, \Phis)$ in Section~\ref{sec:formal-invariants}.\footnote{V4 stores the accumulator as Q128.128 \texttt{feeGrowthGlobalX128}; the raw-token framing here is dimensionally equivalent.} The $3.00\%$ sell fee converts every adversarial LP exit into common-pool value. A holder's two exit paths are both floor-non-decreasing: \texttt{redeem} preserves the floor exactly (Case~3), and the LP-sell path holds it flat at swap and strictly raises it at the next \texttt{collectFees} (Cases~5,~7). Protocol-initiated buys use private-orderflow routing, a uniform delay $\tau \sim U[0, 12\,\text{h}]$, and optional TWAP splitting; residual MEV leakage is bounded by Theorem~\ref{thm:mev-bound} (Appendix~\ref{app:auxiliary}).
 
-\paragraph{Why v4 rather than v2 or v3.} Uniswap v2 fees compound back into the pool's reserves and cannot be routed; v2 also has no per-swap fee primitive, so no asymmetric fee is expressible without writing a wrapper AMM. Uniswap v3 supports routed fees via \texttt{collect()} on NFT positions but offers only fixed per-pool fee tiers. Only v4's \texttt{beforeSwap} hook allows a per-swap, direction-conditional fee on a single pool. We accept v4's larger verification surface (a newer and less battle-tested codebase than v2/v3) as the structural trade-off for the asymmetric-fee primitive on which Cases~5 and~7 of Theorem~\ref{thm:floor-monotonicity} depend.
-
-\paragraph{Two exit paths, both floor-non-decreasing.} A holder may exit via \texttt{redeem} at the contractually-defined floor or via a token-to-stable swap on the LP. The redemption path preserves the floor exactly (Case~3 of Theorem~\ref{thm:floor-monotonicity}). The LP-sell path holds the floor flat at the moment of the swap and strictly raises it at the next \texttt{collectFees} realization (Cases~5 and~7). No protocol-defined operation lowers the floor.
-
-\paragraph{Anti-MEV mitigations.} Protocol-initiated buy-and-burn transactions are predictable in timing and direction, making them sandwichable in expectation. The hook and router together apply three mitigations: (i) private orderflow routing appropriate to the deployment chain (Flashbots Protect on Ethereum mainnet; the native sequencer-protected mempool on chains that provide one); (ii) a uniform random delay $\tau \sim U[0, 12\,\text{h}]$ between the monthly tick and the actual buy execution; (iii) optional TWAP execution that splits the monthly buy across $N$ sub-buys within the delay window. Theorem~\ref{thm:mev-bound} (Section~\ref{sec:economic-analysis}) bounds the residual MEV leakage under these mitigations as a function of private-mempool inclusion probability and TWAP granularity.
-
-\subsection{Revenue router}
-\label{sec:protocol-router}
-
-The router is a one-function contract:
-\begin{verbatim}
-function routeRevenue(uint256 stableAmount) external onlyDepositor;
-\end{verbatim}
-On invocation, it pulls \texttt{stableAmount} from the immutably-set \texttt{depositor} address, deposits exactly half ($\lfloor \texttt{stableAmount}/2 \rfloor$) into the treasury, and uses the remainder ($\lceil \texttt{stableAmount}/2 \rceil$) to execute a buy on the LP via the hook. The tokens received from the buy are burned in the same transaction.
-
-The split is a \texttt{constant} in the router's bytecode---there is no setter, no upgrade path, no governance hook. A different split would require deploying a separate protocol with a separate token. The depositor address is set in the router's constructor and is immutable; substitution after launch is impossible without redeploying the entire system.
-
-\paragraph{Why a fixed 50/50.} A heavier-treasury split (e.g., $70/30$) raises the floor faster but starves buy-and-burn, suppressing the AMM spot dynamics that sustain secondary-market interest. A heavier-burn split (e.g., $30/70$) pumps spot harder but compounds the floor more slowly. The 50/50 choice balances the two; we examine the trade-off as a sensitivity sweep in Section~\ref{sec:numerical-lp-split} (Figure~\ref{fig:lp-frontier} reports the resulting Pareto frontier) but do not claim it is Pareto-optimal in every utility specification. The simplicity of a constant ratio is itself a feature: it makes the router trivial to audit and removes a governance-attack surface that pre-existing tokenomic designs (Section~\ref{sec:related-defi}) have repeatedly failed.
-
-\subsection{Permissionless fee collection}
-\label{sec:protocol-collect}
-
-V4 does not store realized LP fees in a per-position slot; instead, every swap folds its input-side fee into a global accumulator that, for our purposes, accumulates the raw token-side and stable-side fee mass $(\Phit, \Phis)$ until the position holder realizes it (Section~\ref{sec:formal-state} reconciles the raw-token framing with v4's Q128.128 representation). To realize fees, a position holder must call \texttt{PoolManager.modifyLiquidity} with a zero liquidity delta, which returns a \texttt{BalanceDelta} settled through v4's flash-accounting \texttt{take}/\texttt{settle} flow.
-
-M\textsuperscript{2} drives realization through a public, permissionless function:
-\begin{verbatim}
-function collectFees() external returns (uint256 stableOut, uint256 tokenOut);
-\end{verbatim}
-The function acquires the pool-manager lock via \texttt{unlock}, calls \texttt{modifyLiquidity(\ldots, liquidityDelta: 0, \ldots)} on the protocol-owned position, and obtains $(\Kreal, \Ureal) = (\Phit, \Phis)$, the realized token-side and stable-side fee amounts drawn from the raw accumulators. It then distributes the proceeds:
+\paragraph{Revenue router and \texttt{collectFees} distribution.} The router exposes a single function callable only by the immutably-set depositor: it pulls a stable amount, deposits $\lfloor \cdot/2 \rfloor$ into the treasury, and uses $\lceil \cdot/2 \rceil$ for a buy-and-burn via the hook in the same transaction. The split is a bytecode constant---no setter, upgrade path, or governance hook. The hook exposes a permissionless \texttt{collectFees}: it acquires the pool-manager lock, calls \texttt{modifyLiquidity} with zero delta, obtains $(\Kreal, \Ureal) = (\Phit, \Phis)$, and distributes:
 \begin{align}
 \text{caller bounty (token):} \quad & K_b = \lfloor 0.0025 \cdot \Kreal \rfloor, \\
 \text{caller bounty (stable):} \quad & U_b = \lfloor 0.0025 \cdot \Ureal \rfloor, \\
 \text{token burn:} \quad & K_{\text{burn}} = \Kreal - K_b, \\
 \text{stable to treasury:} \quad & U_{\text{treas}} = \Ureal - U_b.
 \end{align}
-Critically, \texttt{collectFees} does \emph{not} route through the revenue router: the router's 50/50 split applies only to direct business-revenue inflows. The collected-fees path has its own simpler rule (stable to treasury, token to burn) because both destinations are unambiguously floor-positive regardless of market state.
+\texttt{collectFees} does \emph{not} route through the revenue router: its destinations are unambiguously floor-positive and the $50/50$ split applies only to direct business revenue. The $0.25\%$-per-side bounty pins the equilibrium inter-call interval at Theorem~\ref{thm:collect-equilibrium}'s break-even point.
 
-\paragraph{Why permissionless with a caller bounty.} The protocol cannot self-execute on a schedule without a keeper. A 0.25\%-per-side bounty creates an economic incentive for any motivated party---MEV searchers, arbitrageurs, or holders themselves---to call the function whenever accumulated fees exceed the gas cost plus bounty threshold. The protocol thus self-drives. Theorem~\ref{thm:collect-equilibrium} (Section~\ref{sec:economic-analysis}) formalizes the calling cadence as a Bertrand-style competitive race under atomless caller entry and derives the equilibrium inter-call interval $\Delta t^*$ in closed form. The 0.25\% rate is itself a design constant: too low and the bounty is dominated by gas cost in any reasonable fee-volume regime; too high and meaningful value leaks to extractors. We do not optimize over this constant in the paper but report its sensitivity in the empirical follow-up.
-
-\subsection{Genesis ceremony and the floor-spot constraint}
-\label{sec:protocol-genesis}
-
-The genesis transaction performs five operations atomically: (i) deploy the four contracts; (ii) mint $\Sup_0 = 10^9$ tokens to the deployer; (iii) deposit $\Tres_0$ into the treasury; (iv) create the v4 pool with the dynamic-fee flag and add a single \emph{full-range} position (over $[\text{MIN\_TICK}, \text{MAX\_TICK}]$) holding $L_{t,0} = 7.5 \times 10^8$ tokens (75\% of supply) and $L_{s,0}$ stable; (v) transfer the remaining $2.5 \times 10^8$ tokens (25\%) to a vesting vault. The deployer-chosen seeds $\Tres_0$ and $L_{s,0}$ are constrained by
+\paragraph{Genesis ceremony and threat model.} The genesis transaction atomically deploys the four contracts, mints $\Sup_0 = 10^9$ tokens, deposits $\Tres_0$ into the treasury, creates the v4 pool with a single full-range position holding $L_{t,0} = 7.5 \cdot 10^8$ tokens and $L_{s,0}$ stable, and transfers the remaining $25\%$ to a vesting vault. The deployer-chosen seeds are constrained by
 \begin{equation}
 \frac{\Tres_0}{\Sup_0} \;=\; \frac{L_{s,0}}{L_{t,0}},
 \label{eq:genesis-constraint}
 \end{equation}
-which forces $\Floor_0 = \Spot_0$ at launch. The canonical instance studied in this paper uses $\Tres_0 = \$1\text{M}$, $L_{s,0} = \$750\text{k}$, giving $\Floor_0 = \Spot_0 = \$0.001$ per token. The 75/25 supply allocation is fixed by the design; the absolute seed sizes are deployer-chosen subject to~\eqref{eq:genesis-constraint}.
+forcing $\Floor_0 = \Spot_0$ at launch. The canonical instance uses $\Tres_0 = \$1$M and $L_{s,0} = \$750$k, giving $\Floor_0 = \Spot_0 = \$0.001$/token, with design constants $f_b = 0.10\%$, $f_s = 3.00\%$, $0.25\%$-per-side bounty, $50/50$ router split, $75/25$ LP/vesting split. Table~\ref{tab:threat-model-condensed} delimits which adversaries are in scope; the full $14$-row surface is in the companion supplementary file \texttt{supplementary-threat-model.tex} bundled with the Zenodo artifact.
 
-\paragraph{Why 75/25 rather than 50/50 or 90/10.} A higher LP fraction extends the AMM's effective lifetime under any fixed buy-and-burn cadence (Theorem~\ref{thm:lp-half-life}: $n_{1/2} = L_{s,0}/B$ months under deterministic monthly buy size $B$). A lower LP fraction reserves more supply for the vesting vault, which supports team incentives and any post-launch airdrop. We treat the 75/25 split as an interior compromise and explore its sensitivity in Section~\ref{sec:numerical-lp-split}, with the resulting LP-longevity-vs-floor-growth Pareto frontier in Figure~\ref{fig:lp-frontier}.
-
-\subsection{Threat model}
-\label{sec:protocol-threat-model}
-
-The formal guarantees of Section~\ref{sec:formal-invariants} hold under a specific set of assumptions about adversary capabilities, the backing stablecoin's solvency, and the underlying execution layer. Table~\ref{tab:threat-model} delimits which adversaries are in scope, what they can do, and what is explicitly out of scope. We adopt the convention of \citet{Babel2023}: an attack vector is \emph{in scope} if the protocol's invariants are claimed to hold against it, and \emph{out of scope} if violation under that vector is acknowledged as residual risk requiring a separate analysis.
-
-{\small
-\begin{longtable}{p{3.0cm} p{5.0cm} p{2.2cm} p{4.0cm}}
-\caption{Threat model. ``In scope'' means the protocol's invariants are claimed to hold against the indicated capability; ``out of scope'' acknowledges residual risk requiring a separate analysis. The table delimits the boundary of the formal guarantees of Section~\ref{sec:formal-invariants}.}
-\label{tab:threat-model} \\
+\begin{table}[t]
+\centering
+\footnotesize
+\caption{Body threat model (six load-bearing rows). ``In scope'' means the protocol's invariants are claimed to hold against the indicated capability; ``out of scope'' acknowledges residual risk requiring separate analysis. The full $14$-row surface is in the companion file \texttt{supplementary-threat-model.tex}.}
+\label{tab:threat-model-condensed}
+\begin{tabular}{p{2.8cm} p{4.8cm} p{2.0cm} p{3.4cm}}
 \toprule
 \textbf{Adversary} & \textbf{Capability} & \textbf{Scope} & \textbf{Where treated} \\
 \midrule
-\endfirsthead
-\multicolumn{4}{l}{\small\itshape Table~\ref{tab:threat-model} continued from previous page.} \\
-\toprule
-\textbf{Adversary} & \textbf{Capability} & \textbf{Scope} & \textbf{Where treated} \\
-\midrule
-\endhead
-\midrule
-\multicolumn{4}{r}{\small\itshape continued on next page} \\
-\endfoot
+Rational holder & Any composition of \texttt{redeem}, LP swap, transfer; observe public state & In scope & Thm~\ref{thm:floor-monotonicity}, Thm~\ref{thm:redemption-fairness} \\
+Coordinated coalition (any size up to total supply) & Submit any sequence of in-protocol operations; coordinate timing & In scope (simultaneous-strategy class) & Thm~\ref{thm:bank-run}; sequenced class is Section~\ref{sec:limitations} (P3) \\
+MEV searcher (single block) & Reorder, sandwich, frontrun within a block; pay priority gas & In scope (bounded leakage) & Thm~\ref{thm:mev-bound}; hook mitigations \\
+Operator (revenue depositor) & Choose timing and magnitude of \texttt{routeRevenue}; choose not to call & Partially in scope: floor preserved at zero revenue; growth operator-dependent & Section~\ref{sec:economic-analysis}; Section~\ref{sec:limitations} \\
+Backing-stable issuer & Freeze treasury balance; depeg the stable; halt transfers & Out of scope (exogenous) & Section~\ref{sec:limitations}; USDC March-2023 depeg as canonical event \\
+Smart-contract bug + L1/L2 execution layer & Violate any invariant via implementation defect; halt chain; long-term censorship & Out of scope (no post-deployment fix; substrate assumption) & Section~\ref{sec:limitations}; audit + mechanized-verification path \\
 \bottomrule
-\endlastfoot
-Rational holder & Choose any composition of \texttt{redeem}, LP swap, transfer; observe public state & In scope & Thm~\ref{thm:floor-monotonicity}, Thm~\ref{thm:redemption-fairness} \\
-Coordinated coalition (any size up to total supply) & Submit any sequence of in-protocol operations; coordinate timing & In scope (simultaneous-strategy class) & Thm~\ref{thm:bank-run}; sequenced-class supremum is Section~\ref{sec:lim-open-math} (P7) \\
-MEV searcher (single block) & Reorder, sandwich, frontrun any user transaction within a block; pay priority gas & In scope (bounded leakage) & Thm~\ref{thm:mev-bound}; \S\ref{sec:protocol-hook} mitigations \\
-\texttt{collectFees}-adjacent MEV (single block) & Time \texttt{collectFees} relative to large swaps within a single block to capture floor-step value & In scope (single-block) & Cor.~\ref{cor:closure} (closure under reordering); \S\ref{sec:protocol-hook} \\
-\texttt{collectFees}-adjacent MEV (cross-block) & Sequence \texttt{collectFees} across blocks to interact with attacker redemptions & Out of scope & \S\ref{sec:limitations} (P4); special case of multi-block MEV \\
-MEV searcher (multi-block, builder collusion) & Coordinate across blocks; influence builder choice & Out of scope & \S\ref{sec:limitations} (P2, P4) \\
-Operator (revenue depositor) & Choose timing and magnitude of \texttt{routeRevenue}; choose not to call & Partially in scope: floor is preserved at zero revenue; growth is operator-dependent & \S\ref{sec:economic-analysis} (CEF analog under cessation); \S\ref{sec:lim-operator} \\
-Operator (strategic timing with vested holdings) & Time \texttt{routeRevenue} deposits jointly with private vested-token positions (25\% of supply); exploit information advantage from knowing imminent deposits & Partially in scope: within-block compositions bounded by Thm~\ref{thm:bank-run} (simultaneous-strategy class); cross-block strategic timing is treated under (P7), and the operator IC analysis is open & \S\ref{sec:lim-open-math} (P7); \S\ref{sec:lim-operator} (operator IC) \\
-Operator (post-genesis bytecode change) & N/A---no upgrade path exists & N/A & Immutability is structural \\
-Vesting recipient & Dump vested tokens to LP after cliff & In scope & Symmetric 3\% sell fee applies; Thm~\ref{thm:bank-run} applies \\
-Third-party oracle consumer & External protocol uses M\textsuperscript{2}'s spot as a price input and is exposed to spot manipulation by an adversary & Out of scope (the on-chain protocol cannot prevent third-party misuse) & \S\ref{sec:limitations} (P3); deployer-side documentation \\
-Backing-stable issuer & Freeze treasury balance; depeg the stable; halt transfers & Out of scope (exogenous) & \S\ref{sec:limitations}; USDC March-2023 depeg as canonical event \\
-Smart-contract bug (any contract in the system) & Violate any stated invariant via implementation defect & Out of scope (no mechanism for post-deployment fix) & \S\ref{sec:limitations}; audit + mechanized-verification path \\
-L1/L2 consensus failure & Halt the chain; censor transactions long-term & Out of scope (substrate assumption) & \S\ref{sec:limitations} \\
-\end{longtable}
-}
+\end{tabular}
+\end{table}
 
-\paragraph{What the threat model does not promise.} M\textsuperscript{2} is \emph{trust-minimized}, not trustless. The rows of Table~\ref{tab:threat-model} marked ``out of scope'' enumerate the residual surfaces. In particular, we make no attempt to defend against an issuer of the backing stable who freezes the treasury's balance; against a smart-contract bug that we and our auditors fail to find; against multi-block MEV under builder collusion (a class of attacks for which no current AMM design has defense); against operator fraud at the revenue-deposit layer (the operator can always choose not to deposit, in which case the floor is preserved but does not grow); against cross-block \texttt{collectFees}-adjacent MEV; or against third-party oracle consumers who treat M\textsuperscript{2}'s spot as a price input (the on-chain protocol cannot prevent third-party misuse). The contributions of this paper concern the operations the protocol \emph{does} define; everything outside that surface is residual risk acknowledged in Section~\ref{sec:limitations}.
+M\textsuperscript{2} is trust-minimized, not trustless: issuer freeze, smart-contract bugs, multi-block MEV under builder collusion, operator fraud, cross-block \texttt{collectFees}-adjacent MEV, and third-party oracle consumers are residual surfaces catalogued in Section~\ref{sec:limitations}.

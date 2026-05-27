@@ -1,0 +1,11 @@
+% ============================================================
+\section{Limitations and Open Problems}
+\label{sec:limitations}
+
+\paragraph{Residual risks.} The protocol is immutable: no upgrade path, admin pause, or governance hook can deploy a bug fix; standard mitigation (external review, integer-reference differential testing, the (P1) Halmos/Certora path) bounds but does not eliminate contract risk. Issuer-side freeze (the March 2023 USDC depeg is canonical) is undefendable; mitigation is restricted to the deployer's choice of stable. Floor \emph{growth} depends on continued revenue: under cessation, Theorem~\ref{thm:spot-floor-convergence} shows graceful CEF-analog degradation, but operator fraud (revenue collected but routed elsewhere) is outside the on-chain threat model and addressed by entity-level disclosure. LP exhaustion under sustained buy-and-burn (Theorem~\ref{thm:lp-half-life}) is intentional: any refill requires either post-genesis minting (violating supply-only-decreases) or treasury redeposit, which lowers the floor since $(\Tres - X)/(\Sup + Y) < \Tres/\Sup$. Regulatory classification is jurisdiction-specific and out of scope.
+
+\paragraph{(P1) End-to-end mechanized verification.} Theorem~\ref{thm:floor-monotonicity} is on paper; discharging it on the deployed bytecode under Halmos or Certora \citep{Tolmach2022} is follow-up work.
+
+\paragraph{(P2) Quantitative LVR/floor-capture identity.} Promoting Conjecture~\ref{conj:lvr-capture} to a theorem requires reconciling LVR's per-unit-time stochastic formulation with M\textsuperscript{2}'s discrete-event floor framing and per-leg fee accounting.
+
+\paragraph{(P3) Sequenced bank-run strategies.} Characterizing the supremum across the full sequenced-strategy class (interleaved LP dumps, \texttt{collectFees}, redemptions within/across blocks) requires modeling the \texttt{collectFees}-bounty equilibrium and v4 fee-realization dynamics.

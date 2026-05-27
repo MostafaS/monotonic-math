@@ -1,0 +1,47 @@
+% Supplementary material: full threat model surface.
+% Not \input{}-ed by main.tex; compiled separately if needed.
+% The body-text version of Section 3 retains the six load-bearing rows for
+% Theorems \ref{thm:bank-run} and \ref{thm:mev-bound}; this file reproduces the
+% full surface for completeness and is referenced in the body table caption.
+\documentclass[11pt,a4paper]{article}
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{array}
+\begin{document}
+\section*{Full Threat Model (Supplementary)}
+
+This supplementary table reproduces the full threat-model surface for the
+Monotonic Math paper. The body table in Section~3 of the main paper retains
+the six load-bearing rows; the remaining rows below catalogue residual
+surfaces explicitly out of scope or partially-in-scope, for completeness.
+
+\begin{table}[h]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{0.95}
+\caption{Full threat model. ``In scope'' means invariants hold against the capability; ``out of scope'' acknowledges residual risk.}
+\label{tab:threat-model-full}
+\begin{tabular}{p{2.4cm} p{4.6cm} p{1.9cm} p{4.0cm}}
+\toprule
+\textbf{Adversary} & \textbf{Capability} & \textbf{Scope} & \textbf{Where treated} \\
+\midrule
+Rational holder & \texttt{redeem}, LP swap, transfer; observe public state & In scope & Floor monotonicity; redemption fairness \\
+Coordinated coalition (up to total supply) & Any sequence of in-protocol ops; timing coordination & In scope (simultaneous class) & Bank-run theorem; sequenced supremum is (P3) \\
+MEV searcher (single block) & Reorder, sandwich, frontrun within a block & In scope (bounded) & MEV-leakage bound; protocol-section mitigations \\
+\texttt{collectFees}-MEV (single block) & Time \texttt{collectFees} vs.\ swaps within a block & In scope & Closure under reordering; protocol section \\
+\texttt{collectFees}-MEV (cross-block) & Sequence \texttt{collectFees} across blocks vs.\ attacker redemptions & Out of scope & Limitations \\
+MEV (multi-block, builder collusion) & Coordinate across blocks; influence builder & Out of scope & Limitations \\
+Operator (revenue depositor) & Timing/magnitude of \texttt{routeRevenue}; cessation & Partially in scope: floor preserved at zero revenue & Economic analysis; Limitations \\
+Operator (strategic timing with vested holdings) & \texttt{routeRevenue} with private vested positions ($25\%$ of supply) & Partial: within-block bounded; cross-block open & Limitations (P3) \\
+Operator (post-genesis bytecode change) & N/A---no upgrade path & N/A & Immutability is structural \\
+Vesting recipient & Dump vested tokens to LP after cliff & In scope & $3\%$ sell fee; bank-run theorem \\
+Third-party oracle consumer & External protocol uses spot as input & Out of scope & Limitations \\
+Backing-stable issuer & Freeze treasury; depeg; halt transfers & Out of scope (exogenous) & Limitations; USDC depeg \\
+Smart-contract bug & Violate any invariant via defect & Out of scope (no post-deploy fix) & Limitations; audit + mech.\ verif. \\
+L1/L2 consensus failure & Halt chain; long-term censorship & Out of scope (substrate) & Limitations \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\end{document}
