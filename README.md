@@ -4,7 +4,7 @@ A provably floor-preserving tokenomic primitive for revenue-bearing on-chain ass
 
 [![Paper PDF](https://img.shields.io/badge/paper-PDF-blue)](paper/main.pdf)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20255140.svg)](https://doi.org/10.5281/zenodo.20255140)
+[![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.20255140-blue)](https://doi.org/10.5281/zenodo.20255140)
 
 > **Latest release:** `v0.2.0-paper-v2` — conference-length (15-page) presentation of the paper. All theorems, proofs, and numerical constants preserved verbatim from the prior `v0.1.2-paper-v1` long-form release. The concept DOI `10.5281/zenodo.20255140` above resolves to the current version.
 
